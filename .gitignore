@@ -1,0 +1,34 @@
+# Build and generated output
+build/
+build-*/
+cmake-build-*/
+out/
+.gradle/
+
+# YOR project-local disposable state
+.yor/cache/
+.yor/derived/
+.yor/logs/
+.yor/generated/
+.yor/editor/
+.yor/project.lock
+
+# IDE and OS files
+.idea/
+.vscode/
+.vs/
+*.user
+*.suo
+*.swp
+Thumbs.db
+.DS_Store
+
+# Native artifacts
+*.dll
+*.dylib
+*.so
+*.lib
+*.exp
+*.pdb
+*.obj
+*.o

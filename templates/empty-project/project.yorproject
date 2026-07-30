@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "project_guid": "2d3d62d0-6c10-4a36-bf58-5e3e40bcf7e3",
+  "name": "YOR Empty Project",
+  "engine": {
+    "repository": "https://github.com/Astonikum/YorEngine.git",
+    "version": "v0.1.0"
+  },
+  "toolchain": {
+    "cxx_standard": "c++20"
+  },
+  "startup_scene": "scenes/main.yorscene",
+  "target_platforms": [
+    "windows-x64"
+  ],
+  "modules": [],
+  "content_roots": [
+    "assets",
+    "scenes",
+    "shaders"
+  ],
+  "editor": {
+    "ui_adapter": "imgui"
+  }
+}

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "**-**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Project contracts (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Validate project template
+        run: python tools/validate_project.py templates/empty-project
+      - name: Check required contracts
+        shell: bash
+        run: |
+          test -f README.md
+          test -f docs/product-contract.md
+          test -f docs/project-format.md
+          test -f docs/roadmap.md
+          test -f templates/empty-project/project.yorproject
+      - name: Check whitespace
+        run: git diff --check
