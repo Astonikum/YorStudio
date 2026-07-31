@@ -1,9 +1,11 @@
 #pragma once
 
 #include "yorstudio/project_lifecycle.hpp"
+#include "yorstudio/editor/editor_document.hpp"
 #include "yorstudio/ui/studio_ui_port.hpp"
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 namespace yorstudio {
@@ -30,6 +32,7 @@ private:
     std::filesystem::path recentProjectsPath_;
     RecentProjects recentProjects_;
     std::optional<ProjectSession> project_;
+    std::unique_ptr<EditorDocument> editor_;
 
     bool recordRecent(const ProjectManifest& manifest, const std::filesystem::path& projectRoot);
     void createProject(const std::filesystem::path& parentRoot, std::string name);
