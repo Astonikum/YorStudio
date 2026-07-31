@@ -160,7 +160,8 @@ StudioUiLight light(const EditorLightState& value) {
     return result;
 }
 
-StudioUiViewportFrame viewport(const yorengine::Scene& scene, std::string sceneKey) {
+StudioUiViewportFrame viewport(const yorengine::Scene& scene, std::string sceneKey,
+                               const std::vector<EditorEntityState>& editorEntities) {
     StudioUiViewportFrame result;
     result.sceneKey = std::move(sceneKey);
     const auto snapshot = scene.captureRenderSnapshot();
@@ -201,6 +202,24 @@ StudioUiViewportFrame viewport(const yorengine::Scene& scene, std::string sceneK
             output.uv[0] = vertex.u;
             output.uv[1] = vertex.v;
             result.vertices.push_back(output);
+        }
+    }
+    for (const auto& editorEntity : editorEntities) {
+        const auto range = std::find_if(result.entities.begin(), result.entities.end(), [&](const auto& value) {
+            return value.index == editorEntity.id.index && value.generation == editorEntity.id.generation;
+        });
+        if (range == result.entities.end()) {
+            result.entities.push_back({
+                editorEntity.id.index,
+                editorEntity.id.generation,
+                0,
+                0,
+                transform(editorEntity.transform),
+                editorEntity.selected,
+            });
+        } else {
+            range->transform = transform(editorEntity.transform);
+            range->selected = editorEntity.selected;
         }
     }
     return result;
@@ -393,8 +412,9 @@ StudioUiFrame StudioApplication::frame() const {
     if (editor_) {
         result.editorOpen = true;
         result.sceneDirty = editor_->dirty();
-        result.viewport = viewport(editor_->scene(), editor_->scenePath().string());
-        for (const auto& entity : editor_->entities()) {
+        const auto editorEntities = editor_->entities();
+        result.viewport = viewport(editor_->scene(), editor_->scenePath().string(), editorEntities);
+        for (const auto& entity : editorEntities) {
             StudioUiEntity item;
             item.index = entity.id.index;
             item.generation = entity.id.generation;

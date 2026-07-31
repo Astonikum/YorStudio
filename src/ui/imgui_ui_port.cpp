@@ -94,6 +94,10 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         action.entityIndex = selection->index;
         action.entityGeneration = selection->generation;
     }
+    if (const auto transform = viewport_.takeTransformEdit()) {
+        action.command = StudioUiCommand::setTransform;
+        action.transform = *transform;
+    }
     ImGui::DockSpaceOverViewport();
 
     if (ImGui::BeginMainMenuBar()) {
@@ -110,7 +114,15 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
     }
 
     ImGui::Begin("Viewport");
-    ImGui::TextDisabled("LMB select  |  RMB orbit  |  MMB pan  |  Wheel zoom");
+    ImGui::TextDisabled("LMB select/gizmo  |  RMB orbit  |  MMB pan  |  Wheel zoom");
+    ImGui::SameLine();
+    if (ImGui::SmallButton(viewport_.gizmoUsesLocalSpace() ? "Gizmo: Local" : "Gizmo: World")) {
+        viewport_.toggleGizmoSpace();
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton(viewport_.gizmoSnappingEnabled() ? "Snap: On" : "Snap: Off")) {
+        viewport_.toggleGizmoSnapping();
+    }
     const ImVec2 viewportPosition = ImGui::GetCursorScreenPos();
     const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     POINT clientPosition{static_cast<LONG>(viewportPosition.x), static_cast<LONG>(viewportPosition.y)};

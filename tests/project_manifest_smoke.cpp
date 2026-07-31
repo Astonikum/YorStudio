@@ -366,6 +366,8 @@ int main() {
         CHECK(application.frame().sceneEntities.size() == 1);
         CHECK(application.frame().sceneEntities.front().name == "Hero");
         CHECK(application.frame().sceneEntities.front().selected);
+        CHECK(application.frame().viewport.entities.size() == 1);
+        CHECK(application.frame().viewport.entities.front().selected);
         StudioUiAction renameObject;
         renameObject.command = StudioUiCommand::renameObject;
         renameObject.objectName = "Player";
@@ -382,6 +384,7 @@ int main() {
         application.handle(setTransform);
         CHECK(application.frame().sceneEntities.front().transform.position[0] == 4.0f);
         CHECK(application.frame().sceneEntities.front().transform.scale[1] == 2.0f);
+        CHECK(application.frame().viewport.entities.front().transform.position[0] == 4.0f);
         application.handle({StudioUiCommand::undo});
         CHECK(application.frame().sceneEntities.front().transform.position[0] == 0.0f);
         const auto appEntity = application.frame().sceneEntities.front();
