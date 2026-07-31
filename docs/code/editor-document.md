@@ -34,6 +34,14 @@ Tags and the 0-31 layer index are native YorEngine metadata exposed through
 the document model. They are validated before scene replacement, serialized as
 version-1 object fields, and edited through undoable inspector commands.
 
+Native camera authoring is persisted under each object's `components` object:
+`camera` stores the Brain lens/channel, `camera_key_point` stores priority,
+blend/lens, GUID-based follow/look-at targets and explicit offset spaces, and
+`camera_noise` stores deterministic shake parameters. Loading validates these
+components on a temporary YorEngine scene before replacing the live document;
+duplicate/undo restoration resolves internal and external GUID targets, while
+unknown component fields remain preserved on save.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.

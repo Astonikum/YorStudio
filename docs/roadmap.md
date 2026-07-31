@@ -86,6 +86,8 @@ project, and document tests unchanged.
   parenting/reparenting,
   cycle errors, active state, and stable selection.
 - [x] Add native tags and layers with scene persistence and inspector actions.
+- [x] Persist native Camera/CameraKeyPoint/CameraNoise state, GUID targets,
+  offset spaces, and deterministic noise through the scene document.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,

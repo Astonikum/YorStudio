@@ -11,7 +11,9 @@
 #include <set>
 #include <sstream>
 #include <memory>
+#include <limits>
 #include <system_error>
+#include <string_view>
 #include <utility>
 
 #ifdef _WIN32
@@ -59,23 +61,23 @@ bool validGuid(const std::string& value) {
     return true;
 }
 
-float number(const nlohmann::json& value, const char* field) {
-    if (!value.is_number()) throw EditorDocumentError(std::string("scene: ") + field + " must be a number");
+float number(const nlohmann::json& value, std::string_view field) {
+    if (!value.is_number()) throw EditorDocumentError(std::string("scene: ") + std::string(field) + " must be a number");
     const float result = value.get<float>();
-    if (!std::isfinite(result)) throw EditorDocumentError(std::string("scene: ") + field + " must be finite");
+    if (!std::isfinite(result)) throw EditorDocumentError(std::string("scene: ") + std::string(field) + " must be finite");
     return result;
 }
 
-yorengine::Vec3 vector3(const nlohmann::json& value, const char* field) {
+yorengine::Vec3 vector3(const nlohmann::json& value, std::string_view field) {
     if (!value.is_array() || value.size() != 3) {
-        throw EditorDocumentError(std::string("scene: ") + field + " must have three values");
+        throw EditorDocumentError(std::string("scene: ") + std::string(field) + " must have three values");
     }
     return {number(value[0], field), number(value[1], field), number(value[2], field)};
 }
 
-yorengine::Quaternion quaternion(const nlohmann::json& value, const char* field) {
+yorengine::Quaternion quaternion(const nlohmann::json& value, std::string_view field) {
     if (!value.is_array() || value.size() != 4) {
-        throw EditorDocumentError(std::string("scene: ") + field + " must have four values");
+        throw EditorDocumentError(std::string("scene: ") + std::string(field) + " must have four values");
     }
     return {number(value[0], field), number(value[1], field), number(value[2], field), number(value[3], field)};
 }
@@ -86,6 +88,224 @@ nlohmann::json vector3Json(yorengine::Vec3 value) {
 
 nlohmann::json quaternionJson(yorengine::Quaternion value) {
     return {value.x, value.y, value.z, value.w};
+}
+
+struct LensValues {
+    float fovYDegrees = 70.0f;
+    float aspectRatio = 16.0f / 9.0f;
+    float nearPlane = 0.05f;
+    float farPlane = 512.0f;
+};
+
+float numberField(const nlohmann::json& value, const char* name, float fallback, std::string_view path) {
+    if (!value.contains(name)) return fallback;
+    return number(value.at(name), std::string(path) + "." + name);
+}
+
+LensValues lensValues(const nlohmann::json& value, std::string_view path) {
+    if (!value.is_object()) throw EditorDocumentError(std::string("scene: ") + std::string(path) + " must be an object");
+    return {
+        numberField(value, "fov_y_degrees", 70.0f, path),
+        numberField(value, "aspect_ratio", 16.0f / 9.0f, path),
+        numberField(value, "near_plane", 0.05f, path),
+        numberField(value, "far_plane", 512.0f, path),
+    };
+}
+
+template <typename CameraLike>
+void applyLens(CameraLike& target, const LensValues& lens) {
+    target.setFovYDegrees(lens.fovYDegrees);
+    target.setAspectRatio(lens.aspectRatio);
+    if (lens.farPlane > target.nearPlane()) {
+        target.setFarPlane(lens.farPlane);
+        target.setNearPlane(lens.nearPlane);
+    } else {
+        target.setNearPlane(lens.nearPlane);
+        target.setFarPlane(lens.farPlane);
+    }
+}
+
+std::uint32_t uint32Field(const nlohmann::json& value, const char* name, std::uint32_t fallback,
+                          std::string_view path) {
+    if (!value.contains(name)) return fallback;
+    const auto& field = value.at(name);
+    if (!field.is_number_integer()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be an integer");
+    }
+    const auto integer = field.get<std::int64_t>();
+    if (integer < 0 || static_cast<std::uint64_t>(integer) > (std::numeric_limits<std::uint32_t>::max)()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " is out of range");
+    }
+    return static_cast<std::uint32_t>(integer);
+}
+
+int intField(const nlohmann::json& value, const char* name, int fallback, std::string_view path) {
+    if (!value.contains(name)) return fallback;
+    const auto& field = value.at(name);
+    if (!field.is_number_integer()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be an integer");
+    }
+    const auto integer = field.get<std::int64_t>();
+    if (integer < (std::numeric_limits<int>::min)() || integer > (std::numeric_limits<int>::max)()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " is out of range");
+    }
+    return static_cast<int>(integer);
+}
+
+bool boolField(const nlohmann::json& value, const char* name, bool fallback, std::string_view path) {
+    if (!value.contains(name)) return fallback;
+    if (!value.at(name).is_boolean()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be a boolean");
+    }
+    return value.at(name).get<bool>();
+}
+
+yorengine::CameraOffsetSpace offsetSpace(const nlohmann::json& value, const char* name,
+                                          yorengine::CameraOffsetSpace fallback, std::string_view path) {
+    if (!value.contains(name)) return fallback;
+    const auto& field = value.at(name);
+    if (!field.is_string()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be a string");
+    }
+    const auto text = field.get<std::string>();
+    if (text == "world") return yorengine::CameraOffsetSpace::World;
+    if (text == "target_local") return yorengine::CameraOffsetSpace::TargetLocal;
+    throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " is invalid");
+}
+
+const nlohmann::json* componentJson(const nlohmann::json& extensions, const char* name) {
+    if (!extensions.contains("components")) return nullptr;
+    const auto& components = extensions.at("components");
+    if (!components.is_object()) throw EditorDocumentError("scene: components must be an object");
+    if (!components.contains(name)) return nullptr;
+    if (!components.at(name).is_object()) {
+        throw EditorDocumentError(std::string("scene: components.") + name + " must be an object");
+    }
+    return &components.at(name);
+}
+
+using EntityResolver = std::function<std::optional<yorengine::EntityId>(std::string_view)>;
+
+std::optional<yorengine::EntityId> targetEntity(const nlohmann::json& value, const char* name,
+                                                const EntityResolver& resolve, std::string_view path) {
+    if (!value.contains(name) || value.at(name).is_null()) return std::nullopt;
+    if (!value.at(name).is_string()) {
+        throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be a UUID or null");
+    }
+    const auto guid = value.at(name).get<std::string>();
+    if (!validGuid(guid)) throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " must be a UUID or null");
+    const auto entity = resolve(guid);
+    if (!entity) throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " references a missing object");
+    return entity;
+}
+
+void applyKnownComponents(yorengine::Scene& scene, yorengine::EntityId entity,
+                          const nlohmann::json& extensions, const EntityResolver& resolve) {
+    const auto* cameraData = componentJson(extensions, "camera");
+    const auto* keyPointData = componentJson(extensions, "camera_key_point");
+    const auto* noiseData = componentJson(extensions, "camera_noise");
+    auto object = scene.object(entity);
+
+    if (cameraData) {
+        auto& camera = object.add<yorengine::Camera>();
+        applyLens(camera, lensValues(cameraData->contains("lens") ? cameraData->at("lens") : *cameraData, "components.camera.lens"));
+        camera.setChannelMask(uint32Field(*cameraData, "channel_mask", 1, "components.camera"));
+    }
+    if (keyPointData) {
+        auto& keyPoint = object.add<yorengine::CameraKeyPoint>();
+        applyLens(keyPoint, lensValues(keyPointData->value("lens", nlohmann::json::object()), "components.camera_key_point.lens"));
+        keyPoint.setPriority(intField(*keyPointData, "priority", 0, "components.camera_key_point"));
+        keyPoint.setEnabled(boolField(*keyPointData, "enabled", true, "components.camera_key_point"));
+        keyPoint.setChannelMask(uint32Field(*keyPointData, "channel_mask", 1, "components.camera_key_point"));
+        keyPoint.setBlendDurationSeconds(numberField(*keyPointData, "blend_duration_seconds", 0.0f, "components.camera_key_point"));
+        if (const auto target = targetEntity(*keyPointData, "follow_target_guid", resolve, "components.camera_key_point")) {
+            keyPoint.setFollowTarget(*target);
+        }
+        keyPoint.setFollowOffset(
+            keyPointData->contains("follow_offset") ? vector3(keyPointData->at("follow_offset"), "components.camera_key_point.follow_offset") : yorengine::Vec3{},
+            offsetSpace(*keyPointData, "follow_offset_space", yorengine::CameraOffsetSpace::TargetLocal, "components.camera_key_point"));
+        if (const auto target = targetEntity(*keyPointData, "look_at_target_guid", resolve, "components.camera_key_point")) {
+            keyPoint.setLookAtTarget(*target);
+        }
+        keyPoint.setLookAtOffset(
+            keyPointData->contains("look_at_offset") ? vector3(keyPointData->at("look_at_offset"), "components.camera_key_point.look_at_offset") : yorengine::Vec3{},
+            offsetSpace(*keyPointData, "look_at_offset_space", yorengine::CameraOffsetSpace::TargetLocal, "components.camera_key_point"));
+    }
+    if (noiseData) {
+        auto& noise = object.add<yorengine::CameraNoise>();
+        noise.setPositionAmplitude(
+            noiseData->contains("position_amplitude") ? vector3(noiseData->at("position_amplitude"), "components.camera_noise.position_amplitude") : yorengine::Vec3{});
+        noise.setRotationAmplitudeDegrees(
+            noiseData->contains("rotation_amplitude_degrees") ? vector3(noiseData->at("rotation_amplitude_degrees"), "components.camera_noise.rotation_amplitude_degrees") : yorengine::Vec3{});
+        noise.setFrequency(numberField(*noiseData, "frequency", 1.0f, "components.camera_noise"));
+        noise.setSeed(uint32Field(*noiseData, "seed", 0, "components.camera_noise"));
+    }
+}
+
+std::string offsetSpaceJson(yorengine::CameraOffsetSpace space) {
+    return space == yorengine::CameraOffsetSpace::World ? "world" : "target_local";
+}
+
+template <typename CameraLike>
+nlohmann::json lensJson(const CameraLike& camera) {
+    return {
+        {"fov_y_degrees", camera.fovYDegrees()},
+        {"aspect_ratio", camera.aspectRatio()},
+        {"near_plane", camera.nearPlane()},
+        {"far_plane", camera.farPlane()},
+    };
+}
+
+std::optional<std::string> targetGuid(yorengine::EntityId target, const std::function<std::optional<std::string>(yorengine::EntityId)>& resolve) {
+    if (!target.valid()) return std::nullopt;
+    const auto guid = resolve(target);
+    if (!guid) throw EditorDocumentError("scene: camera target identity is missing");
+    return guid;
+}
+
+nlohmann::json knownComponents(const yorengine::Scene& scene, yorengine::EntityId entity,
+                               const std::function<std::optional<std::string>(yorengine::EntityId)>& resolve) {
+    nlohmann::json result = nlohmann::json::object();
+    if (const auto* camera = scene.component<yorengine::Camera>(entity)) {
+        result["camera"] = {{"lens", lensJson(*camera)}, {"channel_mask", camera->channelMask()}};
+    }
+    if (const auto* keyPoint = scene.component<yorengine::CameraKeyPoint>(entity)) {
+        nlohmann::json value = nlohmann::json::object();
+        value["lens"] = lensJson(*keyPoint);
+        value["priority"] = keyPoint->priority();
+        value["enabled"] = keyPoint->enabled();
+        value["channel_mask"] = keyPoint->channelMask();
+        value["blend_duration_seconds"] = keyPoint->blendDurationSeconds();
+        const auto followGuid = targetGuid(keyPoint->followTarget(), resolve);
+        const auto lookAtGuid = targetGuid(keyPoint->lookAtTarget(), resolve);
+        value["follow_target_guid"] = followGuid ? nlohmann::json(*followGuid) : nlohmann::json(nullptr);
+        value["follow_offset"] = vector3Json(keyPoint->followOffset());
+        value["follow_offset_space"] = offsetSpaceJson(keyPoint->followOffsetSpace());
+        value["look_at_target_guid"] = lookAtGuid ? nlohmann::json(*lookAtGuid) : nlohmann::json(nullptr);
+        value["look_at_offset"] = vector3Json(keyPoint->lookAtOffset());
+        value["look_at_offset_space"] = offsetSpaceJson(keyPoint->lookAtOffsetSpace());
+        result["camera_key_point"] = std::move(value);
+    }
+    if (const auto* noise = scene.component<yorengine::CameraNoise>(entity)) {
+        result["camera_noise"] = {
+            {"position_amplitude", vector3Json(noise->positionAmplitude())},
+            {"rotation_amplitude_degrees", vector3Json(noise->rotationAmplitudeDegrees())},
+            {"frequency", noise->frequency()},
+            {"seed", noise->seed()},
+        };
+    }
+    return result;
+}
+
+void mergeKnownJson(nlohmann::json& destination, const nlohmann::json& source) {
+    if (!destination.is_object()) destination = nlohmann::json::object();
+    for (const auto& [name, value] : source.items()) {
+        if (destination.contains(name) && destination.at(name).is_object() && value.is_object()) {
+            mergeKnownJson(destination[name], value);
+        } else {
+            destination[name] = value;
+        }
+    }
 }
 
 std::filesystem::path temporaryPath(const std::filesystem::path& destination) {
@@ -178,8 +398,13 @@ std::vector<EditorEntityState> EditorDocument::entities() {
     std::vector<EditorEntityState> result;
     const auto objects = scene_.objects();
     result.reserve(objects.size());
+    const auto guidFor = [this](yorengine::EntityId entity) -> std::optional<std::string> {
+        if (!entity.valid() || !scene_.isAlive(entity)) return std::nullopt;
+        const auto found = entityGuids_.find(entityKey(entity));
+        return found == entityGuids_.end() ? std::nullopt : std::optional{found->second};
+    };
     for (const auto& object : objects) {
-        result.push_back({
+        EditorEntityState state{
             object.id(),
             entityGuids_.at(entityKey(object.id())),
             object.name(),
@@ -188,7 +413,26 @@ std::vector<EditorEntityState> EditorDocument::entities() {
             object.transform(),
             object.active(),
             selection_.contains(object.id()),
-        });
+        };
+        if (const auto* camera = object.component<yorengine::Camera>()) {
+            state.camera = EditorCameraState{
+                camera->fovYDegrees(), camera->aspectRatio(), camera->nearPlane(), camera->farPlane(), camera->channelMask(),
+            };
+        }
+        if (const auto* keyPoint = object.component<yorengine::CameraKeyPoint>()) {
+            state.cameraKeyPoint = EditorCameraKeyPointState{
+                keyPoint->priority(), keyPoint->enabled(), keyPoint->channelMask(), keyPoint->blendDurationSeconds(),
+                {keyPoint->fovYDegrees(), keyPoint->aspectRatio(), keyPoint->nearPlane(), keyPoint->farPlane(), 1},
+                guidFor(keyPoint->followTarget()), keyPoint->followOffset(), keyPoint->followOffsetSpace(),
+                guidFor(keyPoint->lookAtTarget()), keyPoint->lookAtOffset(), keyPoint->lookAtOffsetSpace(),
+            };
+        }
+        if (const auto* noise = object.component<yorengine::CameraNoise>()) {
+            state.cameraNoise = EditorCameraNoiseState{
+                noise->positionAmplitude(), noise->rotationAmplitudeDegrees(), noise->frequency(), noise->seed(),
+            };
+        }
+        result.push_back(std::move(state));
     }
     return result;
 }
@@ -314,6 +558,14 @@ bool EditorDocument::restoreSubtree(yorengine::Scene& scene, const std::vector<O
             if (!parent || !scene.setParent(created[index], *parent)) {
                 throw std::logic_error("invalid parent relationship");
             }
+        }
+        const EntityResolver resolve = [&](std::string_view guid) -> std::optional<yorengine::EntityId> {
+            const auto internal = remapped.find(std::string(guid));
+            if (internal != remapped.end()) return internal->second;
+            return entityForGuid(std::string(guid));
+        };
+        for (std::size_t index = 0; index < snapshots.size(); ++index) {
+            applyKnownComponents(scene, created[index], snapshots[index].extensions, resolve);
         }
     } catch (...) {
         if (!created.empty()) scene.destroyEntity(created.front());
@@ -637,6 +889,36 @@ void EditorDocument::load(const std::filesystem::path& path) {
         }
     }
 
+    yorengine::Scene validationScene;
+    std::unordered_map<std::string, yorengine::EntityId> validationEntities;
+    for (const auto& definition : definitions) {
+        auto object = validationScene.createObject(definition.name);
+        if (!object.setTransform(definition.transform)) throw EditorDocumentError("scene: invalid object transform");
+        object.setActive(definition.active);
+        for (const auto& tag : definition.tags) object.addTag(tag);
+        object.setLayer(definition.layer);
+        validationEntities.emplace(definition.guid, object.id());
+    }
+    for (const auto& definition : definitions) {
+        if (!definition.parentGuid) continue;
+        if (!validationScene.setParent(validationEntities.at(definition.guid), validationEntities.at(*definition.parentGuid))) {
+            throw EditorDocumentError("scene: invalid parent relationship");
+        }
+    }
+    const EntityResolver validationResolve = [&](std::string_view guid) -> std::optional<yorengine::EntityId> {
+        const auto found = validationEntities.find(std::string(guid));
+        return found == validationEntities.end() ? std::nullopt : std::optional{found->second};
+    };
+    try {
+        for (const auto& definition : definitions) {
+            applyKnownComponents(validationScene, validationEntities.at(definition.guid), definition.extensions, validationResolve);
+        }
+    } catch (const EditorDocumentError&) {
+        throw;
+    } catch (const std::exception& error) {
+        throw EditorDocumentError(std::string("scene: invalid camera component: ") + error.what());
+    }
+
     std::error_code pathError;
     const auto absolute = std::filesystem::absolute(path, pathError);
     if (pathError) throw EditorDocumentError("scene: cannot resolve path: " + pathError.message());
@@ -666,6 +948,13 @@ void EditorDocument::load(const std::filesystem::path& path) {
             throw EditorDocumentError("scene: invalid parent relationship");
         }
     }
+    const EntityResolver realResolve = [&](std::string_view guid) -> std::optional<yorengine::EntityId> {
+        const auto found = entitiesByGuid.find(std::string(guid));
+        return found == entitiesByGuid.end() ? std::nullopt : std::optional{found->second};
+    };
+    for (const auto& definition : definitions) {
+        applyKnownComponents(scene_, entitiesByGuid.at(definition.guid), definition.extensions, realResolve);
+    }
 
     scenePath_ = absolute.lexically_normal();
     sceneExtensions_ = std::move(data);
@@ -679,6 +968,11 @@ void EditorDocument::save() {
     nlohmann::json data = sceneExtensions_.is_object() ? sceneExtensions_ : nlohmann::json::object();
     data["schema_version"] = 1;
     data["objects"] = nlohmann::json::array();
+    const auto guidFor = [this](yorengine::EntityId entity) -> std::optional<std::string> {
+        if (!entity.valid() || !scene_.isAlive(entity)) return std::nullopt;
+        const auto found = entityGuids_.find(entityKey(entity));
+        return found == entityGuids_.end() ? std::nullopt : std::optional{found->second};
+    };
     for (const auto& state : entities()) {
         nlohmann::json object = objectExtensions_.contains(state.guid)
             ? objectExtensions_.at(state.guid)
@@ -693,6 +987,11 @@ void EditorDocument::save() {
             {"rotation", quaternionJson(state.transform.rotation)},
             {"scale", vector3Json(state.transform.scale)},
         };
+        nlohmann::json components = object.value("components", nlohmann::json::object());
+        if (!components.is_object()) throw EditorDocumentError("scene: components must be an object");
+        mergeKnownJson(components, knownComponents(scene_, state.id, guidFor));
+        if (components.empty()) object.erase("components");
+        else object["components"] = std::move(components);
         const auto parentEntity = scene_.parent(state.id);
         if (parentEntity.valid()) {
             const auto parentGuid = entityGuids_.find(entityKey(parentEntity));

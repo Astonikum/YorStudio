@@ -438,6 +438,109 @@ int main() {
         }
         CHECK(parentScene["objects"][1]["parent_guid"] == "11111111-1111-4111-8111-111111111111");
 
+        const auto cameraScenePath = temporary.path / "camera.yorscene";
+        const std::string brainGuid = "33333333-3333-4333-8333-333333333333";
+        const std::string shotGuid = "44444444-4444-4444-8444-444444444444";
+        const std::string targetGuid = "55555555-5555-4555-8555-555555555555";
+        nlohmann::json cameraScene = { {"schema_version", 1}, {"objects", nlohmann::json::array()} };
+        nlohmann::json brainObject = { {"guid", brainGuid}, {"name", "Brain"} };
+        brainObject["components"]["camera"]["lens"] = {
+            {"fov_y_degrees", 70.0f}, {"aspect_ratio", 16.0f / 9.0f}, {"near_plane", 0.1f}, {"far_plane", 1000.0f},
+        };
+        brainObject["components"]["camera"]["channel_mask"] = 2;
+
+        nlohmann::json shotObject = { {"guid", shotGuid}, {"name", "Shot"} };
+        auto& keyPointJson = shotObject["components"]["camera_key_point"];
+        keyPointJson["lens"] = {
+            {"fov_y_degrees", 80.0f}, {"aspect_ratio", 16.0f / 9.0f}, {"near_plane", 0.1f}, {"far_plane", 500.0f},
+        };
+        keyPointJson["priority"] = 10;
+        keyPointJson["enabled"] = true;
+        keyPointJson["channel_mask"] = 2;
+        keyPointJson["blend_duration_seconds"] = 0.5f;
+        keyPointJson["follow_target_guid"] = targetGuid;
+        keyPointJson["follow_offset"] = {1.0f, 2.0f, 3.0f};
+        keyPointJson["follow_offset_space"] = "world";
+        keyPointJson["look_at_target_guid"] = targetGuid;
+        keyPointJson["look_at_offset"] = {0.0f, 1.0f, 0.0f};
+        keyPointJson["look_at_offset_space"] = "target_local";
+        keyPointJson["x_unknown"] = true;
+        auto& noiseJson = shotObject["components"]["camera_noise"];
+        noiseJson["position_amplitude"] = {1.0f, 0.5f, 0.25f};
+        noiseJson["rotation_amplitude_degrees"] = {2.0f, 1.0f, 0.0f};
+        noiseJson["frequency"] = 2.0f;
+        noiseJson["seed"] = 42;
+        shotObject["components"]["custom_component"]["preserve"] = true;
+
+        nlohmann::json targetObject = {
+            {"guid", targetGuid}, {"name", "Target"},
+            {"transform", {{"position", {10.0f, 2.0f, -3.0f}}}},
+        };
+        cameraScene["objects"].push_back(std::move(brainObject));
+        cameraScene["objects"].push_back(std::move(shotObject));
+        cameraScene["objects"].push_back(std::move(targetObject));
+        {
+            std::ofstream sceneFile(cameraScenePath, std::ios::binary);
+            sceneFile << cameraScene.dump(2) << '\n';
+        }
+        EditorDocument cameraDocument;
+        cameraDocument.load(cameraScenePath);
+        std::optional<yorengine::EntityId> brainEntity;
+        std::optional<yorengine::EntityId> shotEntity;
+        std::optional<yorengine::EntityId> targetEntity;
+        for (const auto& object : cameraDocument.scene().objects()) {
+            if (object.name() == "Brain") brainEntity = object.id();
+            if (object.name() == "Shot") shotEntity = object.id();
+            if (object.name() == "Target") targetEntity = object.id();
+        }
+        CHECK(brainEntity && shotEntity && targetEntity);
+        const auto* brainCamera = cameraDocument.scene().component<yorengine::Camera>(*brainEntity);
+        const auto* shotKeyPoint = cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity);
+        const auto* shotNoise = cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity);
+        CHECK(brainCamera && shotKeyPoint && shotNoise);
+        CHECK(brainCamera->channelMask() == 2 && shotKeyPoint->priority() == 10);
+        CHECK(shotKeyPoint->followTarget() == *targetEntity && shotKeyPoint->lookAtTarget() == *targetEntity);
+        CHECK(shotKeyPoint->followOffsetSpace() == yorengine::CameraOffsetSpace::World);
+        CHECK(shotKeyPoint->lookAtOffsetSpace() == yorengine::CameraOffsetSpace::TargetLocal);
+        CHECK(shotNoise->seed() == 42);
+        for (const auto& state : cameraDocument.entities()) {
+            if (state.id == *shotEntity) {
+                CHECK(state.cameraKeyPoint && state.cameraNoise);
+                CHECK(state.cameraKeyPoint->followTargetGuid == targetGuid);
+                CHECK(state.cameraNoise->frequency == 2.0f);
+            }
+        }
+        CHECK(cameraDocument.select(*shotEntity));
+        CHECK(cameraDocument.duplicateSelected());
+        const auto duplicateCamera = cameraDocument.selection().active();
+        CHECK(duplicateCamera && cameraDocument.scene().component<yorengine::CameraKeyPoint>(*duplicateCamera));
+        CHECK(cameraDocument.scene().component<yorengine::CameraKeyPoint>(*duplicateCamera)->followTarget() == *targetEntity);
+        cameraDocument.save();
+        {
+            std::ifstream sceneFile(cameraScenePath, std::ios::binary);
+            sceneFile >> cameraScene;
+        }
+        CHECK(cameraScene["objects"][1]["components"]["camera_key_point"]["x_unknown"] == true);
+        CHECK(cameraScene["objects"][1]["components"]["custom_component"]["preserve"] == true);
+
+        auto invalidCameraScene = cameraScene;
+        invalidCameraScene["objects"][1]["components"]["camera_key_point"]["follow_target_guid"] =
+            "66666666-6666-4666-8666-666666666666";
+        const auto invalidCameraPath = temporary.path / "invalid-camera.yorscene";
+        {
+            std::ofstream sceneFile(invalidCameraPath, std::ios::binary);
+            sceneFile << invalidCameraScene.dump(2) << '\n';
+        }
+        EditorDocument invalidCameraDocument;
+        bool invalidCameraRejected = false;
+        try {
+            invalidCameraDocument.load(invalidCameraPath);
+        } catch (const EditorDocumentError&) {
+            invalidCameraRejected = true;
+        }
+        CHECK(invalidCameraRejected);
+        CHECK(invalidCameraDocument.scene().entities().empty());
+
         EditorDocument hierarchy;
         CHECK(hierarchy.createObject("Root"));
         const auto rootEntity = hierarchy.selection().active();
