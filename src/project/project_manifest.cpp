@@ -197,6 +197,10 @@ fs::path ProjectPaths::lockPath() const {
     return hiddenStatePath() / "project.lock";
 }
 
+fs::path ProjectPaths::safeModePath() const {
+    return hiddenStatePath() / "safe-mode.json";
+}
+
 ProjectManifest::ProjectManifest(
     int schemaVersion,
     std::string projectGuid,
@@ -357,6 +361,19 @@ ProjectManifest ProjectManifest::read(const fs::path& path) {
         (std::istreambuf_iterator<char>(stream)),
         std::istreambuf_iterator<char>());
     return fromJson(text);
+}
+
+ProjectManifest ProjectManifest::reidentify(std::string newName) const {
+    Json data = Json::parse(toJson());
+    data["project_guid"] = ProjectManifest::create(name_).projectGuid();
+    if (!newName.empty()) data["name"] = std::move(newName);
+    return fromJson(data.dump());
+}
+
+ProjectManifest ProjectManifest::rename(std::string newName) const {
+    Json data = Json::parse(toJson());
+    data["name"] = std::move(newName);
+    return fromJson(data.dump());
 }
 
 std::string ProjectManifest::toJson() const {

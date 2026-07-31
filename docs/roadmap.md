@@ -40,8 +40,8 @@ acceptance is covered by `yorstudio_project_smoke`.
 
 - [x] Implement workspace roots and recent-project registry with safe path
   validation and no implicit recursive scanning outside configured roots.
-- [ ] Implement New, Open, Import, Duplicate, Migrate, Remove Recent, Reveal,
-  Safe Mode, Reset Disposable State, and Recover flows.
+- [x] Implement headless C++ New, Open, Import, Duplicate, Migrate, Remove
+  Recent, Reveal, Safe Mode, Reset Disposable State, and Recover flows.
 - [x] Create project directories atomically; clean up partial creation after a
   failure without deleting an existing project.
 - [x] Add project lock ownership, explicit local stale-lock recovery, and clear

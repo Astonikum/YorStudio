@@ -21,6 +21,7 @@ MyGame/
   build/                    # local output, never source content
   .yor/
     project.lock            # exclusive editor/project lock
+    safe-mode.json          # launcher safe-mode marker
     editor/                 # local layout and selection state
     cache/                  # disposable import/shader cache
     derived/                # disposable derived asset database
@@ -89,6 +90,14 @@ written.
   operator intervention and are never silently deleted.
 - Safe mode disables third-party modules and offers reset of disposable state.
 - Move/copy operations preserve `project_guid`; a duplicate gets a new identity.
+
+The native lifecycle API in `project_lifecycle.hpp` is the launcher contract:
+`newProject` and `openProject` enforce workspace roots, `importProject` copies
+user-authored files while preserving identity, and `duplicateProject` copies
+them with a new identity. Both operations omit `.yor/` and `build/`, then
+recreate disposable state. `migrateProject`, `revealProject`, recent-entry
+removal, safe-mode markers, disposable-state reset, and stale-lock recovery are
+also headless C++ operations; they never execute project code or plugins.
 
 ## Workspace roots and recent projects
 

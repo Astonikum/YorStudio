@@ -1,7 +1,9 @@
 #include "yorstudio/project_manifest.hpp"
 #include "yorstudio/project_lock.hpp"
+#include "yorstudio/project_lifecycle.hpp"
 #include "yorstudio/project_workspace.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -124,7 +126,7 @@ int main() {
             std::ofstream staleFile(paths.lockPath(), std::ios::binary);
             staleFile << staleLock.dump(2) << '\n';
         }
-        ProjectLock::recoverStale(paths.root);
+        recoverProject(paths.root);
         CHECK(!std::filesystem::exists(paths.lockPath()));
 
         {
@@ -161,10 +163,46 @@ int main() {
         WorkspaceRoots workspaceRoots({workspacePath});
         CHECK(workspaceRoots.allows(gamePaths.root));
         CHECK(!workspaceRoots.allows(temporary.path / "outside"));
+        const auto flowCreated = newProject(workspaceRoots, workspacePath / "FlowCreated", ProjectManifest::create("Flow Created"));
+        CHECK(validateProject(flowCreated.root, true).name() == "Flow Created");
+        {
+            auto opened = openProject(workspaceRoots, flowCreated.root, ProjectAccess::readOnly);
+            CHECK(opened.isReadOnly());
+            opened.close();
+        }
+        std::filesystem::create_directories(customPaths.root / "build");
+        {
+            std::ofstream generated(customPaths.root / "build" / "stale.bin", std::ios::binary);
+            generated << "stale";
+        }
+        const auto imported = importProject(workspaceRoots, customPaths.root, workspacePath / "Imported");
+        const auto duplicated = duplicateProject(workspaceRoots, gamePaths.root, workspacePath / "Duplicated");
+        CHECK(validateProject(imported.root, true).name() == custom.name());
+        CHECK(validateProject(duplicated.root, true).name() == "Contract Game Copy");
+        CHECK(validateProject(imported.root, false).projectGuid() == custom.projectGuid());
+        CHECK(validateProject(duplicated.root, false).projectGuid() != created.projectGuid());
+        CHECK(!std::filesystem::exists(imported.root / "build"));
+        CHECK(std::filesystem::equivalent(revealProject(workspaceRoots, imported.root), imported.root));
+
+        const auto legacyRoot = temporary.path / "Legacy";
+        std::filesystem::create_directories(legacyRoot / ".yor");
+        {
+            std::ofstream legacyManifest(legacyRoot / "project.yorproject", std::ios::binary);
+            legacyManifest << R"({
+                "guid": "2d3d62d0-6c10-4a36-bf58-5e3e40bcf7e3",
+                "display_name": "Migrated Game",
+                "engine_version": "v0.1.0"
+            })";
+        }
+        CHECK(migrateProject(legacyRoot).schemaVersion() == 1);
+        CHECK(ProjectManifest::read(legacyRoot / "project.yorproject").name() == "Migrated Game");
+
         std::vector<DiscoveryIssue> issues;
         const auto discovered = workspaceRoots.discover(issues);
-        CHECK(discovered.size() == 1);
-        CHECK(std::filesystem::equivalent(discovered.front().root, gamePaths.root));
+        CHECK(discovered.size() == 4);
+        CHECK(std::any_of(discovered.begin(), discovered.end(), [&](const auto& project) {
+            return std::filesystem::equivalent(project.root, gamePaths.root);
+        }));
         CHECK(!issues.empty());
         const WorkspaceRoots roundTripRoots = WorkspaceRoots::fromJson(workspaceRoots.toJson());
         CHECK(roundTripRoots.roots().size() == 1);
@@ -176,6 +214,13 @@ int main() {
         try {
             const auto secondWriteSession = workspaceRoots.openProject(gamePaths.root);
         } catch (const ProjectLockError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        rejected = false;
+        try {
+            setSafeMode(gamePaths.root, true, "locked");
+        } catch (const ProjectOperationError&) {
             rejected = true;
         }
         CHECK(rejected);
@@ -196,6 +241,30 @@ int main() {
         CHECK(writeSession.manifest().name() == "Edited Game");
         writeSession.close();
 
+        CHECK(!readSafeMode(gamePaths.root).enabled);
+        setSafeMode(gamePaths.root, true, "crash recovery");
+        CHECK(readSafeMode(gamePaths.root).enabled);
+        CHECK(readSafeMode(gamePaths.root).reason == "crash recovery");
+        {
+            std::ofstream malformedSafeMode(ProjectPaths{gamePaths.root}.safeModePath(), std::ios::binary | std::ios::trunc);
+            malformedSafeMode << "not json";
+        }
+        rejected = false;
+        try {
+            readSafeMode(gamePaths.root);
+        } catch (const ProjectOperationError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        setSafeMode(gamePaths.root, false);
+        CHECK(!readSafeMode(gamePaths.root).enabled);
+        std::ofstream editorState(gamePaths.root / ".yor" / "editor" / "layout.json", std::ios::binary);
+        editorState << "temporary";
+        editorState.close();
+        resetDisposableState(gamePaths.root);
+        CHECK(!std::filesystem::exists(gamePaths.root / ".yor" / "editor"));
+        CHECK(std::filesystem::is_regular_file(gamePaths.root / "scenes" / "main.yorscene"));
+
         RecentProjects recent;
         recent.record(gamePaths.root, created);
         recent.record(customPaths.root, custom);
@@ -207,7 +276,7 @@ int main() {
         const RecentProjects loadedRecent = RecentProjects::read(recentPath);
         CHECK(loadedRecent.entries().size() == 2);
         CHECK(loadedRecent.entries().front().projectGuid == created.projectGuid());
-        recent.remove(customPaths.root);
+        removeRecentProject(recent, customPaths.root);
         CHECK(recent.entries().size() == 1);
 
         const ProjectManifest replacement = ProjectManifest::create("Replacement");
