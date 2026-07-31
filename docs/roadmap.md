@@ -92,9 +92,11 @@ project, and document tests unchanged.
   native validation and undo/redo.
 - [x] Add native Light persistence and editable Light inspector actions with
   kind, color, intensity, range, cone validation, and undo/redo.
+- [x] Add a real YorGL DX11 child viewport fed by YorEngine RenderSnapshot
+  geometry and camera state.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
-- [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,
+- [ ] Extend the viewport with editor grid/axes, camera navigation,
   selection outline, transform gizmos, snapping, local/world modes, and resize.
 - [x] Add version-1 scene save/load with GUID references, atomic writes, and
   preservation of unknown extension data.

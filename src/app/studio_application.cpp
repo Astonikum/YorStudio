@@ -1,5 +1,7 @@
 #include "yorstudio/studio_application.hpp"
 
+#include <yorengine/render_snapshot.hpp>
+
 #include <exception>
 #include <utility>
 
@@ -153,6 +155,43 @@ StudioUiLight light(const EditorLightState& value) {
     result.range = value.range;
     result.innerConeDegrees = value.innerConeDegrees;
     result.outerConeDegrees = value.outerConeDegrees;
+    return result;
+}
+
+StudioUiViewportFrame viewport(const yorengine::Scene& scene) {
+    StudioUiViewportFrame result;
+    const auto snapshot = scene.captureRenderSnapshot();
+    result.sourceVersion = snapshot.sourceVersion();
+    bool cameraFound = false;
+    for (const auto& entity : snapshot.entities()) {
+        if (!cameraFound && entity.camera) {
+            const auto position = entity.worldMatrix.transformPoint({});
+            const auto direction = (entity.worldMatrix.transformPoint({0.0f, 0.0f, 1.0f}) - position).normalized();
+            result.camera.position[0] = position.x;
+            result.camera.position[1] = position.y;
+            result.camera.position[2] = position.z;
+            result.camera.direction[0] = direction.x;
+            result.camera.direction[1] = direction.y;
+            result.camera.direction[2] = direction.z;
+            result.camera.fovYDegrees = entity.camera->fovYDegrees;
+            result.camera.farPlane = entity.camera->farPlane;
+            cameraFound = true;
+        }
+        for (const auto& vertex : entity.meshVertices) {
+            const auto position = entity.worldMatrix.transformPoint(vertex.position);
+            StudioUiRenderVertex output;
+            output.position[0] = position.x;
+            output.position[1] = position.y;
+            output.position[2] = position.z;
+            output.color[0] = vertex.r;
+            output.color[1] = vertex.g;
+            output.color[2] = vertex.b;
+            output.color[3] = vertex.a;
+            output.uv[0] = vertex.u;
+            output.uv[1] = vertex.v;
+            result.vertices.push_back(output);
+        }
+    }
     return result;
 }
 
@@ -334,6 +373,7 @@ StudioUiFrame StudioApplication::frame() const {
     if (editor_) {
         result.editorOpen = true;
         result.sceneDirty = editor_->dirty();
+        result.viewport = viewport(editor_->scene());
         for (const auto& entity : editor_->entities()) {
             StudioUiEntity item;
             item.index = entity.id.index;

@@ -60,7 +60,7 @@ void lightKindCombo(StudioUiLightKind& kind) {
 
 } // namespace
 
-ImGuiUiPort::ImGuiUiPort(Win32Window& window) : window_(window) {
+ImGuiUiPort::ImGuiUiPort(Win32Window& window) : window_(window), viewport_(window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -88,6 +88,7 @@ void ImGuiUiPort::beginFrame() {
 
 StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
     StudioUiAction action;
+    viewport_.setFrame(frame.viewport);
     ImGui::DockSpaceOverViewport();
 
     if (ImGui::BeginMainMenuBar()) {
@@ -102,6 +103,15 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         }
         ImGui::EndMainMenuBar();
     }
+
+    ImGui::Begin("Viewport");
+    const ImVec2 viewportPosition = ImGui::GetCursorScreenPos();
+    const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+    POINT clientPosition{static_cast<LONG>(viewportPosition.x), static_cast<LONG>(viewportPosition.y)};
+    ScreenToClient(window_.handle(), &clientPosition);
+    viewport_.setBounds(clientPosition.x, clientPosition.y,
+                        static_cast<int>(viewportSize.x), static_cast<int>(viewportSize.y));
+    ImGui::End();
 
     ImGui::Begin("YorStudio");
     ImGui::TextUnformatted("YOR project launcher");
@@ -394,6 +404,7 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
 }
 
 void ImGuiUiPort::endFrame() {
+    viewport_.render();
     ImGui::Render();
     if (window_.beginRender()) {
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
