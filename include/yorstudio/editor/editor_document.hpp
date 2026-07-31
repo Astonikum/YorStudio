@@ -75,6 +75,10 @@ struct EditorLightState {
     float outerConeDegrees = 45.0f;
 };
 
+struct EditorMeshState {
+    std::vector<yorengine::MeshVertex> vertices;
+};
+
 struct EditorEntityState {
     yorengine::EntityId id{};
     std::string guid;
@@ -88,6 +92,7 @@ struct EditorEntityState {
     std::optional<EditorCameraKeyPointState> cameraKeyPoint;
     std::optional<EditorCameraNoiseState> cameraNoise;
     std::optional<EditorLightState> light;
+    std::optional<EditorMeshState> mesh;
 };
 
 class EditorDocument {
@@ -125,6 +130,9 @@ public:
     bool addSelectedLight();
     bool removeSelectedLight();
     bool setSelectedLight(EditorLightState state);
+    bool addSelectedMesh();
+    bool addSelectedTriangle();
+    bool removeSelectedMesh();
     void load(const std::filesystem::path& path);
     void save();
     const std::filesystem::path& scenePath() const noexcept { return scenePath_; }

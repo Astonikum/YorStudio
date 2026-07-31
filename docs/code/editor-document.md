@@ -58,6 +58,11 @@ and renders through a separate native YorGL DX11 child window. ImGui owns the
 editor chrome and layout; YorGL owns viewport swap-chain/render lifetime, so a
 future backend change does not leak renderer handles into the document model.
 
+Mesh data is persisted as native `components.mesh.vertices` values and is
+validated before scene replacement. The inspector currently provides empty
+mesh, triangle primitive, and remove commands; all three are native undoable
+operations, while arbitrary mesh editing belongs to the asset/import pipeline.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.
