@@ -57,6 +57,7 @@ target_link_libraries(yorstudio_project_validate PRIVATE yorstudio_project)
 add_library(yorstudio_app STATIC
     src/app/studio_application.cpp
     src/editor/editor_document.cpp
+    src/ui/viewport_math.cpp
 )
 target_compile_features(yorstudio_app PUBLIC cxx_std_20)
 target_include_directories(yorstudio_app PUBLIC include)

@@ -89,6 +89,11 @@ void ImGuiUiPort::beginFrame() {
 StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
     StudioUiAction action;
     viewport_.setFrame(frame.viewport);
+    if (const auto selection = viewport_.takeSelection()) {
+        action.command = StudioUiCommand::selectObject;
+        action.entityIndex = selection->index;
+        action.entityGeneration = selection->generation;
+    }
     ImGui::DockSpaceOverViewport();
 
     if (ImGui::BeginMainMenuBar()) {
@@ -105,6 +110,7 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
     }
 
     ImGui::Begin("Viewport");
+    ImGui::TextDisabled("LMB select  |  RMB orbit  |  MMB pan  |  Wheel zoom");
     const ImVec2 viewportPosition = ImGui::GetCursorScreenPos();
     const ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     POINT clientPosition{static_cast<LONG>(viewportPosition.x), static_cast<LONG>(viewportPosition.y)};
