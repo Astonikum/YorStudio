@@ -193,6 +193,10 @@ fs::path ProjectPaths::hiddenStatePath() const {
     return root / ".yor";
 }
 
+fs::path ProjectPaths::lockPath() const {
+    return hiddenStatePath() / "project.lock";
+}
+
 ProjectManifest::ProjectManifest(
     int schemaVersion,
     std::string projectGuid,
