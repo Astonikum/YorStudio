@@ -169,6 +169,33 @@ int main() {
         const WorkspaceRoots roundTripRoots = WorkspaceRoots::fromJson(workspaceRoots.toJson());
         CHECK(roundTripRoots.roots().size() == 1);
 
+        auto writeSession = workspaceRoots.openProject(gamePaths.root);
+        CHECK(writeSession.access() == ProjectAccess::readWrite);
+        CHECK(writeSession.lockInfo() != nullptr);
+        rejected = false;
+        try {
+            const auto secondWriteSession = workspaceRoots.openProject(gamePaths.root);
+        } catch (const ProjectLockError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        auto readSession = workspaceRoots.openProject(gamePaths.root, ProjectAccess::readOnly);
+        CHECK(readSession.isReadOnly());
+        CHECK(readSession.lockInfo() == nullptr);
+        rejected = false;
+        try {
+            readSession.saveManifest(ProjectManifest::create("Read Only Edit"));
+        } catch (const WorkspaceError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        readSession.close();
+        const ProjectManifest edited = ProjectManifest::create(
+            "Edited Game", "v0.1.0", created.projectGuid());
+        writeSession.saveManifest(edited);
+        CHECK(writeSession.manifest().name() == "Edited Game");
+        writeSession.close();
+
         RecentProjects recent;
         recent.record(gamePaths.root, created);
         recent.record(customPaths.root, custom);

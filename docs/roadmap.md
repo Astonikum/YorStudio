@@ -46,7 +46,7 @@ acceptance is covered by `yorstudio_project_smoke`.
   failure without deleting an existing project.
 - [x] Add project lock ownership, explicit local stale-lock recovery, and clear
   diagnostics for two Studio instances opening the same project.
-- [ ] Add read-only mode for projects that are already locked.
+- [x] Add read-only mode for projects that are already locked.
 - [ ] Add launcher tests for corrupt JSON/manifest, moved project, missing
   engine version, invalid path, locked project, and interrupted creation.
 - [ ] Add the first real window and ImGui adapter only after the launcher model

@@ -136,6 +136,44 @@ void recordCandidate(
 
 } // namespace
 
+ProjectSession ProjectSession::open(const fs::path& projectRoot, ProjectAccess access) {
+    const ProjectManifest manifest = validateProject(projectRoot, false);
+    std::optional<ProjectLock> lock;
+    if (access == ProjectAccess::readWrite) {
+        lock.emplace(ProjectLock::acquire(projectRoot));
+    }
+    return ProjectSession(projectRoot, manifest, access, std::move(lock));
+}
+
+ProjectSession::ProjectSession(
+    fs::path root,
+    ProjectManifest manifest,
+    ProjectAccess access,
+    std::optional<ProjectLock> lock)
+    : root_(std::move(root)), manifest_(std::move(manifest)), access_(access), lock_(std::move(lock)) {}
+
+const ProjectLockInfo* ProjectSession::lockInfo() const noexcept {
+    return lock_.has_value() ? &lock_->info() : nullptr;
+}
+
+void ProjectSession::saveManifest(const ProjectManifest& manifest) {
+    if (isReadOnly()) throw WorkspaceError("project session: read-only session cannot save a manifest");
+    if (!lock_.has_value() || !lock_->ownsLock()) throw WorkspaceError("project session: write lock is not owned");
+    if (manifest.projectGuid() != this->manifest().projectGuid()) {
+        throw WorkspaceError("project session: project identity cannot change while open");
+    }
+    const ProjectLockInfo currentLock = ProjectLock::inspect(root_);
+    if (currentLock.ownerId != lock_->info().ownerId) {
+        throw WorkspaceError("project session: write lock ownership changed");
+    }
+    manifest.writeAtomic(ProjectPaths{root_}.manifestPath());
+    manifest_ = manifest;
+}
+
+void ProjectSession::close() noexcept {
+    lock_.reset();
+}
+
 WorkspaceRoots::WorkspaceRoots(std::vector<fs::path> roots) {
     for (const auto& root : roots) addRoot(root);
 }
@@ -195,6 +233,13 @@ bool WorkspaceRoots::allows(const fs::path& projectRoot) const {
     return std::any_of(roots_.begin(), roots_.end(), [&](const auto& root) {
         return isWithin(candidate, root);
     });
+}
+
+ProjectSession WorkspaceRoots::openProject(const fs::path& projectRoot, ProjectAccess access) const {
+    if (!allows(projectRoot)) {
+        throw WorkspaceError("project session: project is outside configured workspace roots");
+    }
+    return ProjectSession::open(projectRoot, access);
 }
 
 std::vector<DiscoveredProject> WorkspaceRoots::discover(std::vector<DiscoveryIssue>& issues) const {

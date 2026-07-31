@@ -113,6 +113,13 @@ It stores at most 32 absolute project paths with project GUID, display name, and
 UTC last-opened time. Recording a project moves it to the front, while removing
 a recent entry never removes project files.
 
+`WorkspaceRoots::openProject` requires the project to be inside a configured
+root. `ProjectAccess::readWrite` acquires the exclusive project lock and is the
+only mode allowed to save the manifest. `ProjectAccess::readOnly` never takes
+the lock, so an already-running Studio can be inspected safely; attempting to
+save through that session is rejected explicitly rather than silently falling
+back to write access.
+
 ## Git dependencies
 
 YorStudio will consume YorEngine through CMake `FetchContent` or an equivalent
