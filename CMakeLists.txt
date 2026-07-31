@@ -18,6 +18,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 add_library(yorstudio_project STATIC
     src/project/project_manifest.cpp
     src/project/project_lock.cpp
+    src/project/project_workspace.cpp
 )
 target_compile_features(yorstudio_project PUBLIC cxx_std_20)
 target_include_directories(yorstudio_project PUBLIC include)

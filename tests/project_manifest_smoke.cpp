@@ -1,5 +1,6 @@
 #include "yorstudio/project_manifest.hpp"
 #include "yorstudio/project_lock.hpp"
+#include "yorstudio/project_workspace.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -145,6 +146,42 @@ int main() {
         const auto customPaths = createProject(temporary.path / "custom", custom);
         CHECK(std::filesystem::is_directory(customPaths.root / "content"));
         CHECK(validateProject(customPaths.root, true).startupScene() == "content/main.yorscene");
+
+        const auto workspacePath = temporary.path / "workspace";
+        std::filesystem::create_directories(workspacePath);
+        const auto gamePaths = createProject(workspacePath / "Game", created);
+        std::filesystem::create_directories(workspacePath / "Nested" / "Deep");
+        const auto invalidPath = workspacePath / "Broken";
+        std::filesystem::create_directories(invalidPath);
+        {
+            std::ofstream invalidManifest(invalidPath / "project.yorproject", std::ios::binary);
+            invalidManifest << "{}\n";
+        }
+
+        WorkspaceRoots workspaceRoots({workspacePath});
+        CHECK(workspaceRoots.allows(gamePaths.root));
+        CHECK(!workspaceRoots.allows(temporary.path / "outside"));
+        std::vector<DiscoveryIssue> issues;
+        const auto discovered = workspaceRoots.discover(issues);
+        CHECK(discovered.size() == 1);
+        CHECK(std::filesystem::equivalent(discovered.front().root, gamePaths.root));
+        CHECK(!issues.empty());
+        const WorkspaceRoots roundTripRoots = WorkspaceRoots::fromJson(workspaceRoots.toJson());
+        CHECK(roundTripRoots.roots().size() == 1);
+
+        RecentProjects recent;
+        recent.record(gamePaths.root, created);
+        recent.record(customPaths.root, custom);
+        recent.record(gamePaths.root, created);
+        CHECK(recent.entries().size() == 2);
+        CHECK(std::filesystem::equivalent(recent.entries().front().root, gamePaths.root));
+        const auto recentPath = temporary.path / "recent.yorprojects";
+        recent.writeAtomic(recentPath);
+        const RecentProjects loadedRecent = RecentProjects::read(recentPath);
+        CHECK(loadedRecent.entries().size() == 2);
+        CHECK(loadedRecent.entries().front().projectGuid == created.projectGuid());
+        recent.remove(customPaths.root);
+        CHECK(recent.entries().size() == 1);
 
         const ProjectManifest replacement = ProjectManifest::create("Replacement");
         replacement.writeAtomic(paths.manifestPath());
