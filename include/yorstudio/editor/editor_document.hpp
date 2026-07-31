@@ -37,6 +37,35 @@ private:
     std::optional<yorengine::EntityId> active_;
 };
 
+struct EditorCameraState {
+    float fovYDegrees = 70.0f;
+    float aspectRatio = 16.0f / 9.0f;
+    float nearPlane = 0.05f;
+    float farPlane = 512.0f;
+    std::uint32_t channelMask = 1;
+};
+
+struct EditorCameraKeyPointState {
+    int priority = 0;
+    bool enabled = true;
+    std::uint32_t channelMask = 1;
+    float blendDurationSeconds = 0.0f;
+    EditorCameraState lens{};
+    std::optional<std::string> followTargetGuid;
+    yorengine::Vec3 followOffset{};
+    yorengine::CameraOffsetSpace followOffsetSpace = yorengine::CameraOffsetSpace::TargetLocal;
+    std::optional<std::string> lookAtTargetGuid;
+    yorengine::Vec3 lookAtOffset{};
+    yorengine::CameraOffsetSpace lookAtOffsetSpace = yorengine::CameraOffsetSpace::TargetLocal;
+};
+
+struct EditorCameraNoiseState {
+    yorengine::Vec3 positionAmplitude{};
+    yorengine::Vec3 rotationAmplitudeDegrees{};
+    float frequency = 1.0f;
+    std::uint32_t seed = 0;
+};
+
 struct EditorEntityState {
     yorengine::EntityId id{};
     std::string guid;
@@ -46,6 +75,9 @@ struct EditorEntityState {
     yorengine::Transform transform{};
     bool active = true;
     bool selected = false;
+    std::optional<EditorCameraState> camera;
+    std::optional<EditorCameraKeyPointState> cameraKeyPoint;
+    std::optional<EditorCameraNoiseState> cameraNoise;
 };
 
 class EditorDocument {

@@ -22,7 +22,7 @@ set(YORENGINE_BUILD_TESTS OFF CACHE BOOL "Disable YorEngine tests inside YorStud
 FetchContent_Declare(
     yorengine
     GIT_REPOSITORY https://github.com/Astonikum/YorEngine.git
-    GIT_TAG 469d88e489c7f70eedd857139139e7958ea64eae
+    GIT_TAG 0d8e968759aa198427b9563fdbaef750cb23db01
     GIT_SHALLOW FALSE
 )
 FetchContent_MakeAvailable(yorengine)
