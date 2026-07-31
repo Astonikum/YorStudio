@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -15,20 +16,8 @@ namespace yorstudio {
 
 namespace {
 
-int hierarchyDepth(const std::vector<StudioUiEntity>& entities, const StudioUiEntity& entity) {
-    int depth = 0;
-    unsigned int parentIndex = entity.parentIndex;
-    unsigned int parentGeneration = entity.parentGeneration;
-    while (parentGeneration != 0 && depth <= static_cast<int>(entities.size())) {
-        const auto parent = std::find_if(entities.begin(), entities.end(), [&](const StudioUiEntity& candidate) {
-            return candidate.index == parentIndex && candidate.generation == parentGeneration;
-        });
-        if (parent == entities.end()) break;
-        ++depth;
-        parentIndex = parent->parentIndex;
-        parentGeneration = parent->parentGeneration;
-    }
-    return depth;
+std::uint64_t entityKey(const StudioUiEntity& entity) noexcept {
+    return (static_cast<std::uint64_t>(entity.index) << 32u) | entity.generation;
 }
 
 } // namespace
@@ -124,19 +113,49 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         if (ImGui::Button("Redo")) action.command = StudioUiCommand::redo;
         if (frame.sceneDirty) ImGui::SameLine(), ImGui::TextDisabled("modified");
         ImGui::Separator();
-        for (const auto& entity : frame.sceneEntities) {
+        std::unordered_set<std::uint64_t> rendered;
+        const auto hasChildren = [&](const StudioUiEntity& entity) {
+            return std::any_of(frame.sceneEntities.begin(), frame.sceneEntities.end(), [&](const StudioUiEntity& candidate) {
+                return candidate.parentIndex == entity.index && candidate.parentGeneration == entity.generation;
+            });
+        };
+        std::function<void(const StudioUiEntity&)> drawEntity;
+        drawEntity = [&](const StudioUiEntity& entity) {
+            const auto key = entityKey(entity);
+            if (!rendered.insert(key).second) return;
+            const bool children = hasChildren(entity);
             ImGui::PushID(static_cast<int>(entity.index));
-            const int depth = hierarchyDepth(frame.sceneEntities, entity);
-            if (depth > 0) ImGui::Indent(static_cast<float>(depth) * 16.0f);
-            const bool selected = ImGui::Selectable(entity.name.c_str(), entity.selected);
-            if (selected) {
+            ImGui::PushID(static_cast<int>(entity.generation));
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
+            if (entity.selected) flags |= ImGuiTreeNodeFlags_Selected;
+            if (!children) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+            if (children) ImGui::SetNextItemOpen(!collapsedEntities_.contains(key), ImGuiCond_Always);
+            const bool open = ImGui::TreeNodeEx(entity.name.c_str(), flags);
+            if (ImGui::IsItemClicked()) {
                 action.command = StudioUiCommand::selectObject;
                 action.entityIndex = entity.index;
                 action.entityGeneration = entity.generation;
             }
-            if (depth > 0) ImGui::Unindent(static_cast<float>(depth) * 16.0f);
+            if (children) {
+                if (open) {
+                    collapsedEntities_.erase(key);
+                    for (const auto& child : frame.sceneEntities) {
+                        if (child.parentIndex == entity.index && child.parentGeneration == entity.generation) {
+                            drawEntity(child);
+                        }
+                    }
+                    ImGui::TreePop();
+                } else {
+                    collapsedEntities_.insert(key);
+                }
+            }
             ImGui::PopID();
+            ImGui::PopID();
+        };
+        for (const auto& entity : frame.sceneEntities) {
+            if (entity.parentGeneration == 0) drawEntity(entity);
         }
+        for (const auto& entity : frame.sceneEntities) drawEntity(entity);
         if (frame.sceneEntities.empty()) ImGui::TextDisabled("The scene has no objects.");
         if (ImGui::BeginPopup("Set Parent")) {
             if (ImGui::Selectable("No Parent")) {

@@ -82,9 +82,10 @@ project, and document tests unchanged.
 
 - [x] Create a scene document backed by YorEngine public APIs, not a duplicate
   editor ECS.
-- [x] Add hierarchy view, entity create/delete/duplicate, parenting/reparenting,
+- [x] Add collapsible hierarchy tree, entity create/delete/duplicate,
+  parenting/reparenting,
   cycle errors, active state, and stable selection.
-- [ ] Add a collapsible hierarchy tree, tags, and layers.
+- [ ] Add tags and layers.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,

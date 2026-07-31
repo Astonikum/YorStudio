@@ -27,6 +27,8 @@ extension data, and restore fresh runtime `EntityId` values on undo/redo.
 Parenting rejects self/descendant cycles through the engine contract; active
 state changes are also undoable. The editor exposes hierarchy parent identity
 through the UI port without leaking YorEngine or ImGui types into the adapter.
+The ImGui adapter presents this data as a collapsible tree and keeps
+expanded/collapsed state local to the adapter.
 
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
