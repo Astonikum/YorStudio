@@ -229,6 +229,207 @@ bool EditorDocument::createObject(std::string name) {
     });
 }
 
+std::optional<yorengine::EntityId> EditorDocument::entityForGuid(const std::string& guid) const {
+    for (const auto entity : scene_.entities()) {
+        const auto found = entityGuids_.find(entityKey(entity));
+        if (found != entityGuids_.end() && found->second == guid) return entity;
+    }
+    return std::nullopt;
+}
+
+std::vector<EditorDocument::ObjectSnapshot> EditorDocument::snapshotSubtree(yorengine::EntityId root) {
+    std::vector<ObjectSnapshot> result;
+    bool complete = true;
+    auto collect = [&](auto&& self, yorengine::EntityId entity) -> void {
+        if (!complete || !valid(scene_, entity)) {
+            complete = false;
+            return;
+        }
+        const auto guid = entityGuids_.find(entityKey(entity));
+        if (guid == entityGuids_.end()) {
+            complete = false;
+            return;
+        }
+        std::optional<std::string> parentGuid;
+        const auto parent = scene_.parent(entity);
+        if (valid(scene_, parent)) {
+            const auto parentIdentity = entityGuids_.find(entityKey(parent));
+            if (parentIdentity == entityGuids_.end()) {
+                complete = false;
+                return;
+            }
+            parentGuid = parentIdentity->second;
+        }
+        const auto object = scene_.object(entity);
+        result.push_back({
+            guid->second,
+            object.name(),
+            object.transform(),
+            object.active(),
+            std::move(parentGuid),
+            objectExtensions_.contains(guid->second) ? objectExtensions_.at(guid->second) : nlohmann::json::object(),
+        });
+        for (const auto child : scene_.children(entity)) self(self, child);
+    };
+    collect(collect, root);
+    return complete ? std::move(result) : std::vector<ObjectSnapshot>{};
+}
+
+bool EditorDocument::restoreSubtree(yorengine::Scene& scene, const std::vector<ObjectSnapshot>& snapshots,
+                                    const std::vector<std::string>& guids,
+                                    std::vector<yorengine::EntityId>& restored) {
+    if (snapshots.empty() || snapshots.size() != guids.size()) return false;
+    for (const auto& guid : guids) {
+        if (entityForGuid(guid)) return false;
+    }
+
+    std::unordered_map<std::string, yorengine::EntityId> remapped;
+    std::vector<yorengine::EntityId> created;
+    try {
+        created.reserve(snapshots.size());
+        for (std::size_t index = 0; index < snapshots.size(); ++index) {
+            const auto& snapshot = snapshots[index];
+            auto object = scene.createObject(snapshot.name);
+            created.push_back(object.id());
+            if (!object.setTransform(snapshot.transform)) throw std::logic_error("invalid transform");
+            object.setActive(snapshot.active);
+            entityGuids_[entityKey(object.id())] = guids[index];
+            objectExtensions_[guids[index]] = snapshot.extensions;
+            remapped.emplace(snapshot.guid, object.id());
+        }
+        for (std::size_t index = 0; index < snapshots.size(); ++index) {
+            const auto& parentGuid = snapshots[index].parentGuid;
+            if (!parentGuid) continue;
+            const auto internalParent = remapped.find(*parentGuid);
+            const auto parent = internalParent != remapped.end() ? std::optional{internalParent->second}
+                                                                  : entityForGuid(*parentGuid);
+            if (!parent || !scene.setParent(created[index], *parent)) {
+                throw std::logic_error("invalid parent relationship");
+            }
+        }
+    } catch (...) {
+        if (!created.empty()) scene.destroyEntity(created.front());
+        for (std::size_t index = 0; index < created.size(); ++index) {
+            entityGuids_.erase(entityKey(created[index]));
+            if (index < guids.size()) objectExtensions_.erase(guids[index]);
+        }
+        return false;
+    }
+    restored = std::move(created);
+    return true;
+}
+
+bool EditorDocument::deleteSelected() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    auto snapshots = std::make_shared<std::vector<ObjectSnapshot>>(snapshotSubtree(*selected));
+    if (snapshots->empty()) return false;
+    auto guids = std::make_shared<std::vector<std::string>>();
+    for (const auto& snapshot : *snapshots) guids->push_back(snapshot.guid);
+    auto root = std::make_shared<yorengine::EntityId>(*selected);
+    return commit({
+        "Delete Object",
+        [root](yorengine::Scene& scene) {
+            if (!scene.isAlive(*root)) return false;
+            return scene.destroyEntity(*root);
+        },
+        [this, snapshots, guids, root](yorengine::Scene& scene) {
+            std::vector<yorengine::EntityId> restored;
+            if (!restoreSubtree(scene, *snapshots, *guids, restored)) return false;
+            *root = restored.front();
+            return true;
+        },
+        [this, snapshots] {
+            for (const auto& snapshot : *snapshots) objectExtensions_.erase(snapshot.guid);
+            for (auto identity = entityGuids_.begin(); identity != entityGuids_.end();) {
+                const bool removed = std::any_of(snapshots->begin(), snapshots->end(),
+                    [&](const ObjectSnapshot& snapshot) { return snapshot.guid == identity->second; });
+                if (removed) identity = entityGuids_.erase(identity);
+                else ++identity;
+            }
+            selection_.clear();
+        },
+        [this, root] { selection_.replace(scene_, *root); },
+    });
+}
+
+bool EditorDocument::duplicateSelected() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    auto snapshots = std::make_shared<std::vector<ObjectSnapshot>>(snapshotSubtree(*selected));
+    if (snapshots->empty()) return false;
+    snapshots->front().name += " Copy";
+    auto guids = std::make_shared<std::vector<std::string>>();
+    for (std::size_t index = 0; index < snapshots->size(); ++index) {
+        std::string guid;
+        do {
+            guid = newGuid();
+        } while (entityForGuid(guid));
+        guids->push_back(std::move(guid));
+    }
+    auto root = std::make_shared<yorengine::EntityId>();
+    return commit({
+        "Duplicate Object",
+        [this, snapshots, guids, root](yorengine::Scene& scene) {
+            std::vector<yorengine::EntityId> restored;
+            if (!restoreSubtree(scene, *snapshots, *guids, restored)) return false;
+            *root = restored.front();
+            return true;
+        },
+        [this, snapshots, guids, root](yorengine::Scene& scene) {
+            if (!scene.isAlive(*root)) return false;
+            const bool destroyed = scene.destroyEntity(*root);
+            if (!destroyed) return false;
+            for (const auto& guid : *guids) objectExtensions_.erase(guid);
+            for (auto identity = entityGuids_.begin(); identity != entityGuids_.end();) {
+                if (std::find(guids->begin(), guids->end(), identity->second) != guids->end()) {
+                    identity = entityGuids_.erase(identity);
+                } else {
+                    ++identity;
+                }
+            }
+            *root = {};
+            return true;
+        },
+        [this, root] { selection_.replace(scene_, *root); },
+        [this] { selection_.prune(scene_); },
+    });
+}
+
+bool EditorDocument::setSelectedParent(std::optional<yorengine::EntityId> parent) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    if (parent && (!valid(scene_, *parent) || *parent == *selected)) return false;
+    const auto previousParent = scene_.parent(*selected);
+    const std::optional previous = valid(scene_, previousParent) ? std::optional{previousParent} : std::nullopt;
+    if (previous == parent) return true;
+    return commit({
+        "Set Parent",
+        [selected, parent](yorengine::Scene& scene) {
+            return parent ? scene.setParent(*selected, *parent) : scene.clearParent(*selected);
+        },
+        [selected, previous](yorengine::Scene& scene) {
+            return previous ? scene.setParent(*selected, *previous) : scene.clearParent(*selected);
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedActive(bool active) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const bool previous = scene_.active(*selected);
+    if (previous == active) return true;
+    return commit({
+        "Set Active",
+        [selected, active](yorengine::Scene& scene) { return scene.setActive(*selected, active); },
+        [selected, previous](yorengine::Scene& scene) { return scene.setActive(*selected, previous); },
+        {},
+        {},
+    });
+}
+
 bool EditorDocument::renameSelected(std::string name) {
     const auto selected = selection_.active();
     if (!selected || !scene_.isAlive(*selected) || name.empty()) return false;

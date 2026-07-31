@@ -11,6 +11,10 @@ yorengine::EntityId entityId(const StudioUiAction& action) {
     return {action.entityIndex, action.entityGeneration};
 }
 
+yorengine::EntityId parentId(const StudioUiAction& action) {
+    return {action.parentIndex, action.parentGeneration};
+}
+
 yorengine::Transform transform(const StudioUiTransform& value) {
     yorengine::Transform result;
     result.position = {value.position[0], value.position[1], value.position[2]};
@@ -91,6 +95,21 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
     case StudioUiCommand::createObject:
         if (!editor_ || !editor_->createObject(action.objectName)) status_ = "Cannot create object.";
         break;
+    case StudioUiCommand::deleteObject:
+        if (!editor_ || !editor_->deleteSelected()) status_ = "Cannot delete selected object.";
+        break;
+    case StudioUiCommand::duplicateObject:
+        if (!editor_ || !editor_->duplicateSelected()) status_ = "Cannot duplicate selected object.";
+        break;
+    case StudioUiCommand::setParent:
+        if (!editor_ || !editor_->setSelectedParent(parentId(action))) status_ = "Cannot set object parent.";
+        break;
+    case StudioUiCommand::clearParent:
+        if (!editor_ || !editor_->setSelectedParent(std::nullopt)) status_ = "Cannot clear object parent.";
+        break;
+    case StudioUiCommand::setActive:
+        if (!editor_ || !editor_->setSelectedActive(action.active)) status_ = "Cannot change object active state.";
+        break;
     case StudioUiCommand::selectObject:
         if (!editor_ || !editor_->select(entityId(action))) status_ = "Cannot select object.";
         break;
@@ -148,6 +167,11 @@ StudioUiFrame StudioApplication::frame() const {
             StudioUiEntity item;
             item.index = entity.id.index;
             item.generation = entity.id.generation;
+            const auto parent = editor_->scene().parent(entity.id);
+            if (parent.valid()) {
+                item.parentIndex = parent.index;
+                item.parentGeneration = parent.generation;
+            }
             item.name = entity.name;
             item.transform = transform(entity.transform);
             item.active = entity.active;

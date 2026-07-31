@@ -60,6 +60,10 @@ public:
 
     bool select(yorengine::EntityId entity);
     bool createObject(std::string name);
+    bool deleteSelected();
+    bool duplicateSelected();
+    bool setSelectedParent(std::optional<yorengine::EntityId> parent);
+    bool setSelectedActive(bool active);
     bool renameSelected(std::string name);
     bool setSelectedTransform(yorengine::Transform transform);
     void load(const std::filesystem::path& path);
@@ -73,6 +77,15 @@ public:
     bool dirty() const noexcept { return cursor_ != savedCursor_; }
 
 private:
+    struct ObjectSnapshot {
+        std::string guid;
+        std::string name;
+        yorengine::Transform transform{};
+        bool active = true;
+        std::optional<std::string> parentGuid;
+        nlohmann::json extensions = nlohmann::json::object();
+    };
+
     struct Command {
         std::string label;
         std::function<bool(yorengine::Scene&)> apply;
@@ -81,6 +94,10 @@ private:
         std::function<void()> afterUndo;
     };
 
+    std::vector<ObjectSnapshot> snapshotSubtree(yorengine::EntityId root);
+    std::optional<yorengine::EntityId> entityForGuid(const std::string& guid) const;
+    bool restoreSubtree(yorengine::Scene& scene, const std::vector<ObjectSnapshot>& snapshots,
+                        const std::vector<std::string>& guids, std::vector<yorengine::EntityId>& restored);
     bool commit(Command command);
 
     yorengine::Scene scene_;
