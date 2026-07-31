@@ -1,8 +1,10 @@
 #include "yorstudio/project_manifest.hpp"
+#include "yorstudio/project_lock.hpp"
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 #define CHECK(expression) \
@@ -94,6 +96,49 @@ int main() {
         CHECK(std::filesystem::is_directory(paths.root / "code" / "src"));
         CHECK(std::filesystem::is_directory(paths.hiddenStatePath() / "cache"));
         CHECK(std::filesystem::is_regular_file(paths.root / "scenes" / "main.yorscene"));
+
+        auto lock = ProjectLock::acquire(paths.root);
+        CHECK(lock.ownsLock());
+        CHECK(ProjectLock::inspect(paths.root).projectGuid == created.projectGuid());
+        rejected = false;
+        try {
+            const auto secondLock = ProjectLock::acquire(paths.root);
+        } catch (const ProjectLockError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        lock.release();
+        CHECK(!std::filesystem::exists(paths.lockPath()));
+
+        nlohmann::json staleLock = {
+            {"schema_version", 1},
+            {"project_guid", created.projectGuid()},
+            {"owner_id", "stale-owner"},
+            {"host", ProjectLock::localHostName()},
+            {"process_id", std::numeric_limits<std::uint64_t>::max()},
+            {"acquired_at", "2026-01-01T00:00:00Z"},
+            {"studio_version", "v0.1.0"},
+        };
+        {
+            std::ofstream staleFile(paths.lockPath(), std::ios::binary);
+            staleFile << staleLock.dump(2) << '\n';
+        }
+        ProjectLock::recoverStale(paths.root);
+        CHECK(!std::filesystem::exists(paths.lockPath()));
+
+        {
+            std::ofstream malformed(paths.lockPath(), std::ios::binary);
+            malformed << "not json";
+        }
+        rejected = false;
+        try {
+            ProjectLock::recoverStale(paths.root);
+        } catch (const ProjectLockError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        CHECK(std::filesystem::exists(paths.lockPath()));
+        std::filesystem::remove(paths.lockPath());
 
         const ProjectManifest custom = ProjectManifest::create(
             "Custom Roots", "v0.1.0", {}, "content/main.yorscene", {"linux-x64"}, {"gameplay"}, {"content"});

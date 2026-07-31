@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -20,6 +21,7 @@ struct ProjectPaths {
 
     std::filesystem::path manifestPath() const;
     std::filesystem::path hiddenStatePath() const;
+    std::filesystem::path lockPath() const;
 };
 
 class ProjectManifest {

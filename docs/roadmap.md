@@ -44,8 +44,9 @@ acceptance is covered by `yorstudio_project_smoke`.
   Safe Mode, Reset Disposable State, and Recover flows.
 - [ ] Create project directories atomically; clean up partial creation after a
   failure without deleting an existing project.
-- [ ] Add project lock ownership, stale-lock recovery, read-only mode, and clear
+- [x] Add project lock ownership, explicit local stale-lock recovery, and clear
   diagnostics for two Studio instances opening the same project.
+- [ ] Add read-only mode for projects that are already locked.
 - [ ] Add launcher tests for corrupt JSON/manifest, moved project, missing
   engine version, invalid path, locked project, and interrupted creation.
 - [ ] Add the first real window and ImGui adapter only after the launcher model

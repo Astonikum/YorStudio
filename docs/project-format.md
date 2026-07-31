@@ -20,7 +20,7 @@ MyGame/
   plugins/                  # explicitly enabled native extensions
   build/                    # local output, never source content
   .yor/
-    project.lock            # schema/toolchain lock
+    project.lock            # exclusive editor/project lock
     editor/                 # local layout and selection state
     cache/                  # disposable import/shader cache
     derived/                # disposable derived asset database
@@ -79,7 +79,14 @@ written.
 - Opening a project does not execute C++ or load native plugins.
 - `.yor/cache/` and `.yor/derived/` may be deleted and rebuilt at any time.
 - `.yor/editor/` is local editor state and must not alter scene serialization.
-- A lock records owner and tool version; stale locks require explicit recovery.
+- `.yor/project.lock` is a native C++ JSON record containing schema version,
+  project GUID, owner id, host, process id, acquisition timestamp, and Studio
+  version. `ProjectLock::acquire` creates it with an OS-level exclusive create;
+  a second writer is rejected before any project state is changed.
+- `ProjectLock::recoverStale` removes a lock only when its project GUID matches,
+  its host is the current host, and its recorded process is no longer running.
+  Locks from another host, malformed locks, and live owners require explicit
+  operator intervention and are never silently deleted.
 - Safe mode disables third-party modules and offers reset of disposable state.
 - Move/copy operations preserve `project_guid`; a duplicate gets a new identity.
 
