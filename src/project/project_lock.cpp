@@ -82,6 +82,7 @@ bool processAlive(std::uint64_t processId) {
     CloseHandle(process);
     return alive;
 #else
+    if (processId > static_cast<std::uint64_t>((std::numeric_limits<pid_t>::max)())) return false;
     if (::kill(static_cast<pid_t>(processId), 0) == 0) return true;
     return errno == EPERM;
 #endif
