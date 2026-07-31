@@ -28,6 +28,9 @@ private:
     char renameName_[128] = {};
     char tagName_[128] = {};
     StudioUiTransform editedTransform_;
+    StudioUiCamera editedCamera_;
+    StudioUiCameraKeyPoint editedCameraKeyPoint_;
+    StudioUiCameraNoise editedCameraNoise_;
     int editedLayer_ = 0;
     std::unordered_set<std::uint64_t> collapsedEntities_;
     unsigned int inspectedIndex_ = 0;

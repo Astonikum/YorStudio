@@ -20,6 +20,35 @@ std::uint64_t entityKey(const StudioUiEntity& entity) noexcept {
     return (static_cast<std::uint64_t>(entity.index) << 32u) | entity.generation;
 }
 
+void targetCombo(const char* label, const std::vector<StudioUiEntity>& entities,
+                 std::optional<std::string>& targetGuid) {
+    std::string preview = "None";
+    if (targetGuid) {
+        for (const auto& entity : entities) {
+            if (entity.guid == *targetGuid) {
+                preview = entity.name;
+                break;
+            }
+        }
+    }
+    if (!ImGui::BeginCombo(label, preview.c_str())) return;
+    if (ImGui::Selectable("None", !targetGuid)) targetGuid.reset();
+    for (const auto& entity : entities) {
+        const bool selected = targetGuid && *targetGuid == entity.guid;
+        if (ImGui::Selectable(entity.name.c_str(), selected)) targetGuid = entity.guid;
+        if (selected) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+}
+
+void offsetSpaceCombo(const char* label, StudioUiCameraOffsetSpace& space) {
+    const char* values[] = {"Target local", "World"};
+    int selected = space == StudioUiCameraOffsetSpace::world ? 1 : 0;
+    if (ImGui::Combo(label, &selected, values, 2)) {
+        space = selected == 1 ? StudioUiCameraOffsetSpace::world : StudioUiCameraOffsetSpace::targetLocal;
+    }
+}
+
 } // namespace
 
 ImGuiUiPort::ImGuiUiPort(Win32Window& window) : window_(window) {
@@ -197,6 +226,9 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
                 editedLayer_ = static_cast<int>(inspected->layer);
                 tagName_[0] = '\0';
                 editedTransform_ = inspected->transform;
+                editedCamera_ = inspected->camera.value_or(StudioUiCamera{});
+                editedCameraKeyPoint_ = inspected->cameraKeyPoint.value_or(StudioUiCameraKeyPoint{});
+                editedCameraNoise_ = inspected->cameraNoise.value_or(StudioUiCameraNoise{});
             }
             ImGui::InputText("Name", renameName_, sizeof(renameName_));
             if (ImGui::Button("Apply Name")) {
@@ -235,6 +267,71 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
             if (ImGui::Button("Apply Transform")) {
                 action.command = StudioUiCommand::setTransform;
                 action.transform = editedTransform_;
+            }
+            ImGui::Separator();
+            ImGui::TextUnformatted("Camera");
+            if (!inspected->camera) {
+                if (ImGui::Button("Add Camera")) action.command = StudioUiCommand::addCamera;
+            } else {
+                ImGui::PushID("Camera");
+                ImGui::DragFloat("FOV Y", &editedCamera_.fovYDegrees, 0.1f, 0.1f, 179.9f);
+                ImGui::DragFloat("Aspect Ratio", &editedCamera_.aspectRatio, 0.01f, 0.01f, 100.0f);
+                ImGui::DragFloat("Near Plane", &editedCamera_.nearPlane, 0.01f, 0.001f, 100000.0f);
+                ImGui::DragFloat("Far Plane", &editedCamera_.farPlane, 0.1f, 0.002f, 100000.0f);
+                ImGui::InputScalar("Channel Mask", ImGuiDataType_U32, &editedCamera_.channelMask);
+                if (ImGui::Button("Apply Camera")) {
+                    action.command = StudioUiCommand::setCamera;
+                    action.camera = editedCamera_;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove Camera")) action.command = StudioUiCommand::removeCamera;
+                ImGui::PopID();
+            }
+
+            ImGui::TextUnformatted("Camera Key Point");
+            if (!inspected->cameraKeyPoint) {
+                if (ImGui::Button("Add Camera Key Point")) action.command = StudioUiCommand::addCameraKeyPoint;
+            } else {
+                ImGui::PushID("CameraKeyPoint");
+                ImGui::Checkbox("Enabled", &editedCameraKeyPoint_.enabled);
+                ImGui::InputInt("Priority", &editedCameraKeyPoint_.priority);
+                ImGui::InputScalar("Key Point Channel Mask", ImGuiDataType_U32, &editedCameraKeyPoint_.channelMask);
+                ImGui::DragFloat("Blend Duration", &editedCameraKeyPoint_.blendDurationSeconds, 0.01f, 0.0f, 1000.0f);
+                ImGui::DragFloat("Key Point FOV Y", &editedCameraKeyPoint_.lens.fovYDegrees, 0.1f, 0.1f, 179.9f);
+                ImGui::DragFloat("Key Point Aspect Ratio", &editedCameraKeyPoint_.lens.aspectRatio, 0.01f, 0.01f, 100.0f);
+                ImGui::DragFloat("Key Point Near Plane", &editedCameraKeyPoint_.lens.nearPlane, 0.01f, 0.001f, 100000.0f);
+                ImGui::DragFloat("Key Point Far Plane", &editedCameraKeyPoint_.lens.farPlane, 0.1f, 0.002f, 100000.0f);
+                targetCombo("Follow Target", frame.sceneEntities, editedCameraKeyPoint_.followTargetGuid);
+                ImGui::DragFloat3("Follow Offset", editedCameraKeyPoint_.followOffset, 0.1f);
+                offsetSpaceCombo("Follow Offset Space", editedCameraKeyPoint_.followOffsetSpace);
+                targetCombo("Look At Target", frame.sceneEntities, editedCameraKeyPoint_.lookAtTargetGuid);
+                ImGui::DragFloat3("Look At Offset", editedCameraKeyPoint_.lookAtOffset, 0.1f);
+                offsetSpaceCombo("Look At Offset Space", editedCameraKeyPoint_.lookAtOffsetSpace);
+                if (ImGui::Button("Apply Camera Key Point")) {
+                    action.command = StudioUiCommand::setCameraKeyPoint;
+                    action.cameraKeyPoint = editedCameraKeyPoint_;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove Camera Key Point")) action.command = StudioUiCommand::removeCameraKeyPoint;
+                ImGui::PopID();
+            }
+
+            ImGui::TextUnformatted("Camera Noise");
+            if (!inspected->cameraNoise) {
+                if (ImGui::Button("Add Camera Noise")) action.command = StudioUiCommand::addCameraNoise;
+            } else {
+                ImGui::PushID("CameraNoise");
+                ImGui::DragFloat3("Position Amplitude", editedCameraNoise_.positionAmplitude, 0.01f, 0.0f, 100000.0f);
+                ImGui::DragFloat3("Rotation Amplitude", editedCameraNoise_.rotationAmplitudeDegrees, 0.1f, 0.0f, 360.0f);
+                ImGui::DragFloat("Noise Frequency", &editedCameraNoise_.frequency, 0.01f, 0.001f, 1000.0f);
+                ImGui::InputScalar("Noise Seed", ImGuiDataType_U32, &editedCameraNoise_.seed);
+                if (ImGui::Button("Apply Camera Noise")) {
+                    action.command = StudioUiCommand::setCameraNoise;
+                    action.cameraNoise = editedCameraNoise_;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove Camera Noise")) action.command = StudioUiCommand::removeCameraNoise;
+                ImGui::PopID();
             }
         }
         ImGui::End();

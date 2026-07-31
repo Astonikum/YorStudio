@@ -103,6 +103,15 @@ public:
     bool setSelectedLayer(std::uint32_t layer);
     bool renameSelected(std::string name);
     bool setSelectedTransform(yorengine::Transform transform);
+    bool addSelectedCamera();
+    bool removeSelectedCamera();
+    bool setSelectedCamera(EditorCameraState state);
+    bool addSelectedCameraKeyPoint();
+    bool removeSelectedCameraKeyPoint();
+    bool setSelectedCameraKeyPoint(EditorCameraKeyPointState state);
+    bool addSelectedCameraNoise();
+    bool removeSelectedCameraNoise();
+    bool setSelectedCameraNoise(EditorCameraNoiseState state);
     void load(const std::filesystem::path& path);
     void save();
     const std::filesystem::path& scenePath() const noexcept { return scenePath_; }
