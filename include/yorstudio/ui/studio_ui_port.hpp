@@ -21,6 +21,8 @@ struct StudioUiEntity {
     unsigned int generation = 0;
     unsigned int parentIndex = 0;
     unsigned int parentGeneration = 0;
+    std::vector<std::string> tags;
+    unsigned int layer = 0;
     std::string name;
     StudioUiTransform transform;
     bool active = true;
@@ -51,6 +53,9 @@ enum class StudioUiCommand {
     setParent,
     clearParent,
     setActive,
+    addTag,
+    removeTag,
+    setLayer,
     renameObject,
     setTransform,
     undo,
@@ -69,6 +74,8 @@ struct StudioUiAction {
     unsigned int entityGeneration = 0;
     unsigned int parentIndex = 0;
     unsigned int parentGeneration = 0;
+    unsigned int layer = 0;
+    std::string tag;
     bool active = true;
     StudioUiTransform transform;
 };

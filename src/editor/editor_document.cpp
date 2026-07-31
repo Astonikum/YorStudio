@@ -183,6 +183,8 @@ std::vector<EditorEntityState> EditorDocument::entities() {
             object.id(),
             entityGuids_.at(entityKey(object.id())),
             object.name(),
+            object.tags(),
+            object.layer(),
             object.transform(),
             object.active(),
             selection_.contains(object.id()),
@@ -264,6 +266,8 @@ std::vector<EditorDocument::ObjectSnapshot> EditorDocument::snapshotSubtree(yore
         result.push_back({
             guid->second,
             object.name(),
+            object.tags(),
+            object.layer(),
             object.transform(),
             object.active(),
             std::move(parentGuid),
@@ -293,6 +297,10 @@ bool EditorDocument::restoreSubtree(yorengine::Scene& scene, const std::vector<O
             created.push_back(object.id());
             if (!object.setTransform(snapshot.transform)) throw std::logic_error("invalid transform");
             object.setActive(snapshot.active);
+            for (const auto& tag : snapshot.tags) {
+                if (!object.addTag(tag)) throw std::logic_error("duplicate tag");
+            }
+            object.setLayer(snapshot.layer);
             entityGuids_[entityKey(object.id())] = guids[index];
             objectExtensions_[guids[index]] = snapshot.extensions;
             remapped.emplace(snapshot.guid, object.id());
@@ -430,6 +438,48 @@ bool EditorDocument::setSelectedActive(bool active) {
     });
 }
 
+bool EditorDocument::addSelectedTag(std::string tag) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || tag.empty()) return false;
+    if (scene_.hasTag(*selected, tag)) return true;
+    auto value = std::make_shared<std::string>(std::move(tag));
+    return commit({
+        "Add Tag",
+        [selected, value](yorengine::Scene& scene) { return scene.addTag(*selected, *value); },
+        [selected, value](yorengine::Scene& scene) { return scene.removeTag(*selected, *value); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedTag(std::string tag) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || tag.empty()) return false;
+    if (!scene_.hasTag(*selected, tag)) return true;
+    auto value = std::make_shared<std::string>(std::move(tag));
+    return commit({
+        "Remove Tag",
+        [selected, value](yorengine::Scene& scene) { return scene.removeTag(*selected, *value); },
+        [selected, value](yorengine::Scene& scene) { return scene.addTag(*selected, *value); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedLayer(std::uint32_t layer) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || layer > yorengine::Scene::MaxLayer) return false;
+    const std::uint32_t previous = scene_.layer(*selected);
+    if (previous == layer) return true;
+    return commit({
+        "Set Layer",
+        [selected, layer](yorengine::Scene& scene) { return scene.setLayer(*selected, layer); },
+        [selected, previous](yorengine::Scene& scene) { return scene.setLayer(*selected, previous); },
+        {},
+        {},
+    });
+}
+
 bool EditorDocument::renameSelected(std::string name) {
     const auto selected = selection_.active();
     if (!selected || !scene_.isAlive(*selected) || name.empty()) return false;
@@ -505,6 +555,8 @@ void EditorDocument::load(const std::filesystem::path& path) {
     struct Definition {
         std::string guid;
         std::string name;
+        std::vector<std::string> tags;
+        std::uint32_t layer = 0;
         yorengine::Transform transform;
         bool active = true;
         std::optional<std::string> parentGuid;
@@ -524,6 +576,31 @@ void EditorDocument::load(const std::filesystem::path& path) {
         if (!guids.insert(guid).second) throw EditorDocumentError("scene: duplicate object guid");
         if (!entry.contains("name") || !entry["name"].is_string() || entry["name"].get<std::string>().empty()) {
             throw EditorDocumentError("scene: object name must be a non-empty string");
+        }
+
+        std::vector<std::string> tags;
+        if (entry.contains("tags")) {
+            if (!entry["tags"].is_array()) throw EditorDocumentError("scene: tags must be an array");
+            std::set<std::string> uniqueTags;
+            for (const auto& tag : entry["tags"]) {
+                if (!tag.is_string() || tag.get<std::string>().empty() || !uniqueTags.insert(tag.get<std::string>()).second) {
+                    throw EditorDocumentError("scene: tags must contain unique non-empty strings");
+                }
+                tags.push_back(tag.get<std::string>());
+            }
+        }
+        std::uint32_t layer = 0;
+        if (entry.contains("layer")) {
+            if (!entry["layer"].is_number_integer()) throw EditorDocumentError("scene: layer must be an integer");
+            const auto value = entry["layer"].is_number_unsigned()
+                ? entry["layer"].get<std::uint64_t>()
+                : entry["layer"].get<std::int64_t>() < 0
+                    ? std::uint64_t{yorengine::Scene::MaxLayer + 1}
+                    : static_cast<std::uint64_t>(entry["layer"].get<std::int64_t>());
+            if (value > yorengine::Scene::MaxLayer) {
+                throw EditorDocumentError("scene: layer must be between 0 and 31");
+            }
+            layer = static_cast<std::uint32_t>(value);
         }
 
         yorengine::Transform objectTransform;
@@ -546,7 +623,8 @@ void EditorDocument::load(const std::filesystem::path& path) {
             parentGuid = entry["parent_guid"].get<std::string>();
             parents.emplace(guid, *parentGuid);
         }
-        definitions.push_back({guid, entry["name"].get<std::string>(), objectTransform, active, parentGuid, entry});
+        definitions.push_back({guid, entry["name"].get<std::string>(), std::move(tags), layer, objectTransform,
+                               active, parentGuid, entry});
     }
 
     for (const auto& definition : definitions) {
@@ -576,6 +654,8 @@ void EditorDocument::load(const std::filesystem::path& path) {
         auto object = scene_.createObject(definition.name);
         if (!object.setTransform(definition.transform)) throw EditorDocumentError("scene: invalid object transform");
         object.setActive(definition.active);
+        for (const auto& tag : definition.tags) object.addTag(tag);
+        object.setLayer(definition.layer);
         entitiesByGuid.emplace(definition.guid, object.id());
         entityGuids_.emplace(entityKey(object.id()), definition.guid);
         objectExtensions_.emplace(definition.guid, definition.extensions);
@@ -605,6 +685,8 @@ void EditorDocument::save() {
             : nlohmann::json::object();
         object["guid"] = state.guid;
         object["name"] = state.name;
+        object["tags"] = state.tags;
+        object["layer"] = state.layer;
         object["active"] = state.active;
         object["transform"] = {
             {"position", vector3Json(state.transform.position)},

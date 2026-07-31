@@ -110,6 +110,15 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
     case StudioUiCommand::setActive:
         if (!editor_ || !editor_->setSelectedActive(action.active)) status_ = "Cannot change object active state.";
         break;
+    case StudioUiCommand::addTag:
+        if (!editor_ || !editor_->addSelectedTag(action.tag)) status_ = "Cannot add object tag.";
+        break;
+    case StudioUiCommand::removeTag:
+        if (!editor_ || !editor_->removeSelectedTag(action.tag)) status_ = "Cannot remove object tag.";
+        break;
+    case StudioUiCommand::setLayer:
+        if (!editor_ || !editor_->setSelectedLayer(action.layer)) status_ = "Cannot change object layer.";
+        break;
     case StudioUiCommand::selectObject:
         if (!editor_ || !editor_->select(entityId(action))) status_ = "Cannot select object.";
         break;
@@ -172,6 +181,8 @@ StudioUiFrame StudioApplication::frame() const {
                 item.parentIndex = parent.index;
                 item.parentGeneration = parent.generation;
             }
+            item.tags = entity.tags;
+            item.layer = entity.layer;
             item.name = entity.name;
             item.transform = transform(entity.transform);
             item.active = entity.active;

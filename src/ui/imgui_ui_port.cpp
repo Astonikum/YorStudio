@@ -194,6 +194,8 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
                 inspectedGeneration_ = inspected->generation;
                 std::strncpy(renameName_, inspected->name.c_str(), sizeof(renameName_) - 1);
                 renameName_[sizeof(renameName_) - 1] = '\0';
+                editedLayer_ = static_cast<int>(inspected->layer);
+                tagName_[0] = '\0';
                 editedTransform_ = inspected->transform;
             }
             ImGui::InputText("Name", renameName_, sizeof(renameName_));
@@ -205,6 +207,26 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
             if (ImGui::Checkbox("Active", &active)) {
                 action.command = StudioUiCommand::setActive;
                 action.active = active;
+            }
+            ImGui::InputInt("Layer", &editedLayer_);
+            if (ImGui::Button("Apply Layer")) {
+                action.command = StudioUiCommand::setLayer;
+                action.layer = editedLayer_ < 0 ? 32u : static_cast<unsigned int>(editedLayer_);
+            }
+            ImGui::InputText("Tag", tagName_, sizeof(tagName_));
+            if (ImGui::Button("Add Tag")) {
+                action.command = StudioUiCommand::addTag;
+                action.tag = tagName_;
+            }
+            for (const auto& tag : inspected->tags) {
+                ImGui::PushID(tag.c_str());
+                ImGui::TextUnformatted(tag.c_str());
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Remove")) {
+                    action.command = StudioUiCommand::removeTag;
+                    action.tag = tag;
+                }
+                ImGui::PopID();
             }
             ImGui::Separator();
             ImGui::DragFloat3("Position", editedTransform_.position, 0.1f);

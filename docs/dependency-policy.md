@@ -14,8 +14,8 @@ CMake at the immutable commit `9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03`
 at commit `9b4eb24cee2071e61dc1f9ef3e5228097cdde720` (the v1.92.9-docking tag)
 for its first UI adapter. Both revisions are declared in the root
 `CMakeLists.txt` and tested by native CI. YorStudio now consumes YorEngine at
-immutable commit `9a4921176da619c147168f40e01d4a86f49e666b` for the editor's
-public `Scene` and command contracts.
+immutable commit `469d88e489c7f70eedd857139139e7958ea64eae` for the editor's
+public `Scene`, metadata, and command contracts.
 
 When a dependency is introduced:
 
