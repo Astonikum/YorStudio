@@ -80,7 +80,7 @@ project, and document tests unchanged.
 
 ## Phase 3 - Scene editor
 
-- [ ] Create a scene document backed by YorEngine public APIs, not a duplicate
+- [x] Create a scene document backed by YorEngine public APIs, not a duplicate
   editor ECS.
 - [ ] Add hierarchy tree, entity create/delete/duplicate, parenting/reparenting,
   cycle errors, active state, tags/layers, and stable selection.
@@ -88,8 +88,9 @@ project, and document tests unchanged.
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,
   selection outline, transform gizmos, snapping, local/world modes, and resize.
-- [ ] Add scene save/load with schema version, GUID references, migrations,
-  atomic writes, and preservation of unknown extension data.
+- [x] Add version-1 scene save/load with GUID references, atomic writes, and
+  preservation of unknown extension data.
+- [ ] Add scene migrations for future schema versions.
 - [ ] Add prefab/nested-scene instances with override tracking and conflict
   diagnostics.
 

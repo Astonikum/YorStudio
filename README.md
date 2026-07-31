@@ -8,8 +8,8 @@ The first tested C++20 desktop slice is now available on Windows: a native
 Win32/DX11 window with a dockable Dear ImGui launcher can create, reopen, and
 close real YOR projects through the same manifest, recent-registry, and lock
 lifecycle used by headless CI. Opening a project now exposes a real YorEngine
-scene document with hierarchy selection, object creation, inspector edits, and
-undo/redo.
+scene document with hierarchy selection, object creation, inspector edits,
+undo/redo, and versioned scene save/load.
 The editor model does not depend on ImGui, so the adapter can be replaced later.
 
 ## YOR repositories

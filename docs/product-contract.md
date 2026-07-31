@@ -7,9 +7,10 @@ workflows while keeping the runtime usable without the editor.
 Status: first desktop slice. The repository contains the tested project
 contracts, launcher lifecycle, a native Windows/DX11 window, and a real ImGui
 launcher adapter with new-project and persistent recent-project flows. The
-editor model now owns a YorEngine-backed in-memory scene document with
-selection and command history, while remaining independent from both ImGui and
-the native window implementation.
+editor model now owns a YorEngine-backed scene document with persistent
+version-1 JSON serialization, stable GUIDs, selection, and command history,
+while remaining independent from both ImGui and the native window
+implementation.
 
 ## Product surfaces
 

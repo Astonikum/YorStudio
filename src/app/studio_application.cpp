@@ -58,7 +58,13 @@ void StudioApplication::openProject(const std::filesystem::path& projectRoot) {
         const ProjectManifest manifest = session.manifest();
         project_ = std::move(session);
         editor_ = std::make_unique<EditorDocument>();
-        if (recordRecent(manifest, root)) status_ = "Project opened.";
+        std::string sceneStatus = "Project opened.";
+        try {
+            editor_->load(root / manifest.startupScene());
+        } catch (const EditorDocumentError& error) {
+            sceneStatus = std::string("Project opened; scene unavailable: ") + error.what();
+        }
+        if (recordRecent(manifest, root)) status_ = std::move(sceneStatus);
     } catch (const std::exception& error) {
         status_ = error.what();
     }
@@ -101,6 +107,18 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
         break;
     case StudioUiCommand::redo:
         if (!editor_ || !editor_->redo()) status_ = "Nothing to redo.";
+        break;
+    case StudioUiCommand::saveScene:
+        if (!editor_) {
+            status_ = "No scene is open.";
+            break;
+        }
+        try {
+            editor_->save();
+            status_ = "Scene saved.";
+        } catch (const EditorDocumentError& error) {
+            status_ = error.what();
+        }
         break;
     case StudioUiCommand::closeProject:
         closeProject();
@@ -170,7 +188,13 @@ void StudioApplication::createProject(const std::filesystem::path& parentRoot, s
         const ProjectManifest actual = session.manifest();
         project_ = std::move(session);
         editor_ = std::make_unique<EditorDocument>();
-        if (recordRecent(actual, root)) status_ = "Project created and opened.";
+        std::string sceneStatus = "Project created and opened.";
+        try {
+            editor_->load(root / actual.startupScene());
+        } catch (const EditorDocumentError& error) {
+            sceneStatus = std::string("Project created; scene unavailable: ") + error.what();
+        }
+        if (recordRecent(actual, root)) status_ = std::move(sceneStatus);
     } catch (const std::exception& error) {
         status_ = error.what();
     }
