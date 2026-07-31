@@ -6,11 +6,32 @@
 #include "backends/imgui_impl_win32.h"
 #include "imgui.h"
 
+#include <algorithm>
 #include <cstring>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace yorstudio {
+
+namespace {
+
+int hierarchyDepth(const std::vector<StudioUiEntity>& entities, const StudioUiEntity& entity) {
+    int depth = 0;
+    unsigned int parentIndex = entity.parentIndex;
+    unsigned int parentGeneration = entity.parentGeneration;
+    while (parentGeneration != 0 && depth <= static_cast<int>(entities.size())) {
+        const auto parent = std::find_if(entities.begin(), entities.end(), [&](const StudioUiEntity& candidate) {
+            return candidate.index == parentIndex && candidate.generation == parentGeneration;
+        });
+        if (parent == entities.end()) break;
+        ++depth;
+        parentIndex = parent->parentIndex;
+        parentGeneration = parent->parentGeneration;
+    }
+    return depth;
+}
+
+} // namespace
 
 ImGuiUiPort::ImGuiUiPort(Win32Window& window) : window_(window) {
     IMGUI_CHECKVERSION();
@@ -92,6 +113,12 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         ImGui::SameLine();
         if (ImGui::Button("Save Scene")) action.command = StudioUiCommand::saveScene;
         ImGui::SameLine();
+        if (ImGui::Button("Delete")) action.command = StudioUiCommand::deleteObject;
+        ImGui::SameLine();
+        if (ImGui::Button("Duplicate")) action.command = StudioUiCommand::duplicateObject;
+        ImGui::SameLine();
+        if (ImGui::Button("Set Parent...")) ImGui::OpenPopup("Set Parent");
+        ImGui::SameLine();
         if (ImGui::Button("Undo")) action.command = StudioUiCommand::undo;
         ImGui::SameLine();
         if (ImGui::Button("Redo")) action.command = StudioUiCommand::redo;
@@ -99,15 +126,37 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         ImGui::Separator();
         for (const auto& entity : frame.sceneEntities) {
             ImGui::PushID(static_cast<int>(entity.index));
+            const int depth = hierarchyDepth(frame.sceneEntities, entity);
+            if (depth > 0) ImGui::Indent(static_cast<float>(depth) * 16.0f);
             const bool selected = ImGui::Selectable(entity.name.c_str(), entity.selected);
             if (selected) {
                 action.command = StudioUiCommand::selectObject;
                 action.entityIndex = entity.index;
                 action.entityGeneration = entity.generation;
             }
+            if (depth > 0) ImGui::Unindent(static_cast<float>(depth) * 16.0f);
             ImGui::PopID();
         }
         if (frame.sceneEntities.empty()) ImGui::TextDisabled("The scene has no objects.");
+        if (ImGui::BeginPopup("Set Parent")) {
+            if (ImGui::Selectable("No Parent")) {
+                action.command = StudioUiCommand::clearParent;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::Separator();
+            for (const auto& entity : frame.sceneEntities) {
+                if (entity.selected) continue;
+                ImGui::PushID(static_cast<int>(entity.index));
+                if (ImGui::Selectable(entity.name.c_str())) {
+                    action.command = StudioUiCommand::setParent;
+                    action.parentIndex = entity.index;
+                    action.parentGeneration = entity.generation;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
         ImGui::End();
 
         ImGui::Begin("Inspector");
@@ -132,6 +181,11 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
             if (ImGui::Button("Apply Name")) {
                 action.command = StudioUiCommand::renameObject;
                 action.objectName = renameName_;
+            }
+            bool active = inspected->active;
+            if (ImGui::Checkbox("Active", &active)) {
+                action.command = StudioUiCommand::setActive;
+                action.active = active;
             }
             ImGui::Separator();
             ImGui::DragFloat3("Position", editedTransform_.position, 0.1f);

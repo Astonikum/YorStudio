@@ -19,6 +19,8 @@ struct StudioUiTransform {
 struct StudioUiEntity {
     unsigned int index = 0;
     unsigned int generation = 0;
+    unsigned int parentIndex = 0;
+    unsigned int parentGeneration = 0;
     std::string name;
     StudioUiTransform transform;
     bool active = true;
@@ -44,6 +46,11 @@ enum class StudioUiCommand {
     newProject,
     createObject,
     selectObject,
+    deleteObject,
+    duplicateObject,
+    setParent,
+    clearParent,
+    setActive,
     renameObject,
     setTransform,
     undo,
@@ -60,6 +67,9 @@ struct StudioUiAction {
     std::string objectName;
     unsigned int entityIndex = 0;
     unsigned int entityGeneration = 0;
+    unsigned int parentIndex = 0;
+    unsigned int parentGeneration = 0;
+    bool active = true;
     StudioUiTransform transform;
 };
 

@@ -21,6 +21,13 @@ temporary sibling file and atomically replaces the scene, retaining unknown
 top-level and object fields so newer editor data is not silently destroyed.
 The saved history cursor drives `StudioUiFrame::sceneDirty`.
 
+Hierarchy edits operate on the YorEngine scene directly. Delete and duplicate
+commands include the selected subtree, preserve persistent object GUIDs and
+extension data, and restore fresh runtime `EntityId` values on undo/redo.
+Parenting rejects self/descendant cycles through the engine contract; active
+state changes are also undoable. The editor exposes hierarchy parent identity
+through the UI port without leaking YorEngine or ImGui types into the adapter.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.
