@@ -36,16 +36,16 @@ class FakeUiPort final : public yorstudio::StudioUiPort {
 public:
     void beginFrame() override { ++beginCount; }
 
-    yorstudio::StudioUiCommand draw(const yorstudio::StudioUiFrame& frame) override {
+    yorstudio::StudioUiAction draw(const yorstudio::StudioUiFrame& frame) override {
         lastFrame = frame;
-        return nextCommand;
+        return nextAction;
     }
 
     void endFrame() override { ++endCount; }
 
     int beginCount = 0;
     int endCount = 0;
-    yorstudio::StudioUiCommand nextCommand = yorstudio::StudioUiCommand::none;
+    yorstudio::StudioUiAction nextAction;
     yorstudio::StudioUiFrame lastFrame;
 };
 
@@ -348,15 +348,33 @@ int main() {
         CHECK(application.frame().projectName == "Replacement");
         FakeUiPort fakeUi;
         fakeUi.beginFrame();
-        CHECK(fakeUi.draw(application.frame()) == StudioUiCommand::none);
+        CHECK(fakeUi.draw(application.frame()).command == StudioUiCommand::none);
         fakeUi.endFrame();
         CHECK(fakeUi.beginCount == 1);
         CHECK(fakeUi.endCount == 1);
         CHECK(fakeUi.lastFrame.projectName == "Replacement");
-        application.handle(StudioUiCommand::closeProject);
+        application.handle({StudioUiCommand::closeProject});
         CHECK(!application.frame().projectOpen);
-        application.handle(StudioUiCommand::quit);
+        application.handle({StudioUiCommand::quit});
         CHECK(!application.running());
+
+        const auto recentRegistry = temporary.path / "launcher-recent.yorprojects";
+        StudioApplication launcher(recentRegistry);
+        launcher.handle({StudioUiCommand::newProject, {}, "Created Game"}, temporary.path);
+        CHECK(launcher.frame().projectOpen);
+        CHECK(launcher.frame().projectName == "Created Game");
+        CHECK(std::filesystem::is_regular_file(temporary.path / "Created Game" / "project.yorproject"));
+        CHECK(launcher.frame().recentProjects.size() == 1);
+        const std::string createdRoot = launcher.frame().recentProjects.front().root;
+        launcher.handle({StudioUiCommand::closeProject});
+
+        StudioApplication reopened(recentRegistry);
+        CHECK(!reopened.frame().projectOpen);
+        CHECK(reopened.frame().recentProjects.size() == 1);
+        reopened.handle({StudioUiCommand::openRecentProject, createdRoot});
+        CHECK(reopened.frame().projectOpen);
+        CHECK(reopened.frame().projectName == "Created Game");
+        reopened.handle({StudioUiCommand::quit});
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

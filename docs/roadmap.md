@@ -51,6 +51,8 @@ acceptance is covered by `yorstudio_project_smoke`.
 - [x] Add the first real Windows window and ImGui adapter after the launcher
   model passed headless tests; the adapter opens/closes a real project through
   the public launcher lifecycle.
+- [x] Connect the desktop launcher to the public new-project and recent-project
+  flows, persisting recent roots under the native user-data directory.
 
 Acceptance: a user can create and reopen an empty project from the launcher,
 and a corrupt cache never destroys `code/`, `assets/`, or `scenes/`.

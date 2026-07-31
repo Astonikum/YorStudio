@@ -22,17 +22,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         return 1;
     }
 
-    yorstudio::StudioApplication application;
+    yorstudio::StudioApplication application(window.recentProjectsPath());
     if (!initialProject.empty()) application.openProject(initialProject);
     yorstudio::ImGuiUiPort ui(window);
 
     while (window.pumpMessages() && application.running()) {
         ui.beginFrame();
-        const auto command = ui.draw(application.frame());
-        if (command == yorstudio::StudioUiCommand::chooseProject) {
-            application.handle(command, window.browseForProject());
+        const auto action = ui.draw(application.frame());
+        if (action.command == yorstudio::StudioUiCommand::chooseProject) {
+            application.handle(action, window.browseForProject());
+        } else if (action.command == yorstudio::StudioUiCommand::newProject) {
+            application.handle(action, window.browseForDirectory(L"Select a parent folder for the new YOR project"));
         } else {
-            application.handle(command);
+            application.handle(action);
         }
         ui.endFrame();
     }
