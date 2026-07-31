@@ -66,6 +66,15 @@ struct EditorCameraNoiseState {
     std::uint32_t seed = 0;
 };
 
+struct EditorLightState {
+    yorengine::Light::Kind kind = yorengine::Light::Kind::Directional;
+    yorengine::Vec3 color{1.0f, 1.0f, 1.0f};
+    float intensity = 1.0f;
+    float range = 10.0f;
+    float innerConeDegrees = 15.0f;
+    float outerConeDegrees = 45.0f;
+};
+
 struct EditorEntityState {
     yorengine::EntityId id{};
     std::string guid;
@@ -78,6 +87,7 @@ struct EditorEntityState {
     std::optional<EditorCameraState> camera;
     std::optional<EditorCameraKeyPointState> cameraKeyPoint;
     std::optional<EditorCameraNoiseState> cameraNoise;
+    std::optional<EditorLightState> light;
 };
 
 class EditorDocument {
@@ -112,6 +122,9 @@ public:
     bool addSelectedCameraNoise();
     bool removeSelectedCameraNoise();
     bool setSelectedCameraNoise(EditorCameraNoiseState state);
+    bool addSelectedLight();
+    bool removeSelectedLight();
+    bool setSelectedLight(EditorLightState state);
     void load(const std::filesystem::path& path);
     void save();
     const std::filesystem::path& scenePath() const noexcept { return scenePath_; }

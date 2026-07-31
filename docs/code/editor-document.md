@@ -48,6 +48,11 @@ The camera inspector exposes this state through plain `StudioUiFrame` and
 Dear ImGui; target pickers write stable object GUIDs rather than transient
 entity indices.
 
+Light authoring follows the same contract under `components.light`: kind,
+color, intensity, range, and cone limits are validated by YorEngine before a
+command is committed. Kind changes replace the native Light with an undoable
+command so its immutable native kind stays authoritative.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.

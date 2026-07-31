@@ -90,6 +90,8 @@ project, and document tests unchanged.
   offset spaces, and deterministic noise through the scene document.
 - [x] Add editable Camera/CameraKeyPoint/CameraNoise inspector actions with
   native validation and undo/redo.
+- [x] Add native Light persistence and editable Light inspector actions with
+  kind, color, intensity, range, cone validation, and undo/redo.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,

@@ -173,6 +173,15 @@ yorengine::CameraOffsetSpace offsetSpace(const nlohmann::json& value, const char
     throw EditorDocumentError(std::string("scene: ") + std::string(path) + "." + name + " is invalid");
 }
 
+yorengine::Light::Kind lightKind(const nlohmann::json& value, std::string_view path) {
+    if (!value.is_string()) throw EditorDocumentError(std::string("scene: ") + std::string(path) + " must be a string");
+    const auto text = value.get<std::string>();
+    if (text == "directional") return yorengine::Light::Kind::Directional;
+    if (text == "point") return yorengine::Light::Kind::Point;
+    if (text == "spot") return yorengine::Light::Kind::Spot;
+    throw EditorDocumentError(std::string("scene: ") + std::string(path) + " is invalid");
+}
+
 const nlohmann::json* componentJson(const nlohmann::json& extensions, const char* name) {
     if (!extensions.contains("components")) return nullptr;
     const auto& components = extensions.at("components");
@@ -240,6 +249,16 @@ void applyKnownComponents(yorengine::Scene& scene, yorengine::EntityId entity,
         noise.setFrequency(numberField(*noiseData, "frequency", 1.0f, "components.camera_noise"));
         noise.setSeed(uint32Field(*noiseData, "seed", 0, "components.camera_noise"));
     }
+    if (const auto* lightData = componentJson(extensions, "light")) {
+        const auto kind = lightData->contains("kind")
+            ? lightKind(lightData->at("kind"), "components.light.kind") : yorengine::Light::Kind::Directional;
+        auto& light = object.add<yorengine::Light>(kind);
+        light.setColor(lightData->contains("color") ? vector3(lightData->at("color"), "components.light.color") : yorengine::Vec3{1.0f, 1.0f, 1.0f});
+        light.setIntensity(numberField(*lightData, "intensity", 1.0f, "components.light"));
+        light.setRange(numberField(*lightData, "range", 10.0f, "components.light"));
+        light.setCone(numberField(*lightData, "inner_cone_degrees", 15.0f, "components.light"),
+                      numberField(*lightData, "outer_cone_degrees", 45.0f, "components.light"));
+    }
 }
 
 template <typename CameraLike>
@@ -281,6 +300,13 @@ void applyCameraNoiseState(yorengine::CameraNoise& noise, const EditorCameraNois
     noise.setSeed(state.seed);
 }
 
+void applyLightState(yorengine::Light& light, const EditorLightState& state) {
+    light.setColor(state.color);
+    light.setIntensity(state.intensity);
+    light.setRange(state.range);
+    light.setCone(state.innerConeDegrees, state.outerConeDegrees);
+}
+
 bool sameVec3(yorengine::Vec3 left, yorengine::Vec3 right) noexcept {
     return left.x == right.x && left.y == right.y && left.z == right.z;
 }
@@ -302,6 +328,21 @@ bool sameCameraNoiseState(const EditorCameraNoiseState& left, const EditorCamera
     return sameVec3(left.positionAmplitude, right.positionAmplitude) &&
         sameVec3(left.rotationAmplitudeDegrees, right.rotationAmplitudeDegrees) &&
         left.frequency == right.frequency && left.seed == right.seed;
+}
+
+bool sameLightState(const EditorLightState& left, const EditorLightState& right) noexcept {
+    return left.kind == right.kind && sameVec3(left.color, right.color) && left.intensity == right.intensity &&
+        left.range == right.range && left.innerConeDegrees == right.innerConeDegrees &&
+        left.outerConeDegrees == right.outerConeDegrees;
+}
+
+std::string lightKindJson(yorengine::Light::Kind kind) {
+    switch (kind) {
+    case yorengine::Light::Kind::Directional: return "directional";
+    case yorengine::Light::Kind::Point: return "point";
+    case yorengine::Light::Kind::Spot: return "spot";
+    }
+    throw EditorDocumentError("scene: light kind is invalid");
 }
 
 std::string offsetSpaceJson(yorengine::CameraOffsetSpace space) {
@@ -354,6 +395,16 @@ nlohmann::json knownComponents(const yorengine::Scene& scene, yorengine::EntityI
             {"rotation_amplitude_degrees", vector3Json(noise->rotationAmplitudeDegrees())},
             {"frequency", noise->frequency()},
             {"seed", noise->seed()},
+        };
+    }
+    if (const auto* light = scene.component<yorengine::Light>(entity)) {
+        result["light"] = {
+            {"kind", lightKindJson(light->kind())},
+            {"color", vector3Json(light->color())},
+            {"intensity", light->intensity()},
+            {"range", light->range()},
+            {"inner_cone_degrees", light->innerConeDegrees()},
+            {"outer_cone_degrees", light->outerConeDegrees()},
         };
     }
     return result;
@@ -492,6 +543,12 @@ std::vector<EditorEntityState> EditorDocument::entities() {
         if (const auto* noise = object.component<yorengine::CameraNoise>()) {
             state.cameraNoise = EditorCameraNoiseState{
                 noise->positionAmplitude(), noise->rotationAmplitudeDegrees(), noise->frequency(), noise->seed(),
+            };
+        }
+        if (const auto* light = object.component<yorengine::Light>()) {
+            state.light = EditorLightState{
+                light->kind(), light->color(), light->intensity(), light->range(),
+                light->innerConeDegrees(), light->outerConeDegrees(),
             };
         }
         result.push_back(std::move(state));
@@ -1117,6 +1174,94 @@ bool EditorDocument::setSelectedCameraNoise(EditorCameraNoiseState state) {
     });
 }
 
+bool EditorDocument::addSelectedLight() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::Light>(*selected)) return false;
+    return commit({
+        "Add Light",
+        [selected](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::Light>();
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Light>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedLight() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::Light>(*selected);
+    if (!current) return false;
+    const EditorLightState before{
+        current->kind(), current->color(), current->intensity(), current->range(),
+        current->innerConeDegrees(), current->outerConeDegrees(),
+    };
+    return commit({
+        "Remove Light",
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Light>(*selected); },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                auto& light = scene.object(*selected).add<yorengine::Light>(before.kind);
+                applyLightState(light, before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedLight(EditorLightState state) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::Light>(*selected);
+    if (!current) return false;
+    const EditorLightState before{
+        current->kind(), current->color(), current->intensity(), current->range(),
+        current->innerConeDegrees(), current->outerConeDegrees(),
+    };
+    if (sameLightState(before, state)) return true;
+    try {
+        yorengine::Light validation(state.kind);
+        applyLightState(validation, state);
+    } catch (...) {
+        return false;
+    }
+    return commit({
+        "Set Light",
+        [selected, state](yorengine::Scene& scene) {
+            try {
+                if (!scene.removeComponent<yorengine::Light>(*selected)) return false;
+                auto& light = scene.object(*selected).add<yorengine::Light>(state.kind);
+                applyLightState(light, state);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                if (!scene.removeComponent<yorengine::Light>(*selected)) return false;
+                auto& light = scene.object(*selected).add<yorengine::Light>(before.kind);
+                applyLightState(light, before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
 void EditorDocument::load(const std::filesystem::path& path) {
     if (path.empty()) throw EditorDocumentError("scene: path must not be empty");
     std::ifstream stream(path, std::ios::binary);
@@ -1327,6 +1472,7 @@ void EditorDocument::save() {
         if (!state.camera) components.erase("camera");
         if (!state.cameraKeyPoint) components.erase("camera_key_point");
         if (!state.cameraNoise) components.erase("camera_noise");
+        if (!state.light) components.erase("light");
         if (components.empty()) object.erase("components");
         else object["components"] = std::move(components);
         const auto parentEntity = scene_.parent(state.id);

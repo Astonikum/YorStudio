@@ -390,6 +390,20 @@ int main() {
         CHECK(application.frame().sceneEntities.front().camera->fovYDegrees == 70.0f);
         application.handle({StudioUiCommand::redo});
         CHECK(application.frame().sceneEntities.front().camera->fovYDegrees == 55.0f);
+        application.handle({StudioUiCommand::addLight});
+        CHECK(application.frame().sceneEntities.front().light.has_value());
+        StudioUiAction setAppLight;
+        setAppLight.command = StudioUiCommand::setLight;
+        setAppLight.light = StudioUiLight{};
+        setAppLight.light->kind = StudioUiLightKind::point;
+        setAppLight.light->intensity = 2.0f;
+        application.handle(setAppLight);
+        CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::point);
+        CHECK(application.frame().sceneEntities.front().light->intensity == 2.0f);
+        application.handle({StudioUiCommand::undo});
+        CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::directional);
+        application.handle({StudioUiCommand::redo});
+        CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::point);
         application.handle({StudioUiCommand::saveScene});
         CHECK(!application.frame().sceneDirty);
         nlohmann::json savedScene;
@@ -460,6 +474,7 @@ int main() {
         const std::string brainGuid = "33333333-3333-4333-8333-333333333333";
         const std::string shotGuid = "44444444-4444-4444-8444-444444444444";
         const std::string targetGuid = "55555555-5555-4555-8555-555555555555";
+        const std::string lightGuid = "77777777-7777-4777-8777-777777777777";
         nlohmann::json cameraScene = { {"schema_version", 1}, {"objects", nlohmann::json::array()} };
         nlohmann::json brainObject = { {"guid", brainGuid}, {"name", "Brain"} };
         brainObject["components"]["camera"]["lens"] = {
@@ -494,9 +509,17 @@ int main() {
             {"guid", targetGuid}, {"name", "Target"},
             {"transform", {{"position", {10.0f, 2.0f, -3.0f}}}},
         };
+        nlohmann::json lightObject = {
+            {"guid", lightGuid}, {"name", "Sun"},
+            {"components", {{"light", {
+                {"kind", "spot"}, {"color", {1.0f, 0.8f, 0.5f}}, {"intensity", 3.0f},
+                {"range", 25.0f}, {"inner_cone_degrees", 10.0f}, {"outer_cone_degrees", 40.0f},
+            }}}},
+        };
         cameraScene["objects"].push_back(std::move(brainObject));
         cameraScene["objects"].push_back(std::move(shotObject));
         cameraScene["objects"].push_back(std::move(targetObject));
+        cameraScene["objects"].push_back(std::move(lightObject));
         {
             std::ofstream sceneFile(cameraScenePath, std::ios::binary);
             sceneFile << cameraScene.dump(2) << '\n';
@@ -506,12 +529,14 @@ int main() {
         std::optional<yorengine::EntityId> brainEntity;
         std::optional<yorengine::EntityId> shotEntity;
         std::optional<yorengine::EntityId> targetEntity;
+        std::optional<yorengine::EntityId> lightEntity;
         for (const auto& object : cameraDocument.scene().objects()) {
             if (object.name() == "Brain") brainEntity = object.id();
             if (object.name() == "Shot") shotEntity = object.id();
             if (object.name() == "Target") targetEntity = object.id();
+            if (object.name() == "Sun") lightEntity = object.id();
         }
-        CHECK(brainEntity && shotEntity && targetEntity);
+        CHECK(brainEntity && shotEntity && targetEntity && lightEntity);
         const auto* brainCamera = cameraDocument.scene().component<yorengine::Camera>(*brainEntity);
         const auto* shotKeyPoint = cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity);
         const auto* shotNoise = cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity);
@@ -521,6 +546,8 @@ int main() {
         CHECK(shotKeyPoint->followOffsetSpace() == yorengine::CameraOffsetSpace::World);
         CHECK(shotKeyPoint->lookAtOffsetSpace() == yorengine::CameraOffsetSpace::TargetLocal);
         CHECK(shotNoise->seed() == 42);
+        const auto* sun = cameraDocument.scene().component<yorengine::Light>(*lightEntity);
+        CHECK(sun && sun->kind() == yorengine::Light::Kind::Spot && sun->intensity() == 3.0f);
         for (const auto& state : cameraDocument.entities()) {
             if (state.id == *shotEntity) {
                 CHECK(state.cameraKeyPoint && state.cameraNoise);
@@ -570,6 +597,33 @@ int main() {
         CHECK(cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity)->frequency() == 2.0f);
         CHECK(cameraDocument.redo());
         CHECK(cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity)->frequency() == 4.0f);
+
+        CHECK(cameraDocument.select(*lightEntity));
+        EditorLightState editedLight;
+        for (const auto& state : cameraDocument.entities()) {
+            if (state.id == *lightEntity) {
+                CHECK(state.light.has_value());
+                editedLight = *state.light;
+            }
+        }
+        editedLight.kind = yorengine::Light::Kind::Point;
+        editedLight.intensity = 5.0f;
+        CHECK(cameraDocument.setSelectedLight(editedLight));
+        CHECK(cameraDocument.scene().component<yorengine::Light>(*lightEntity)->kind() == yorengine::Light::Kind::Point);
+        CHECK(cameraDocument.scene().component<yorengine::Light>(*lightEntity)->intensity() == 5.0f);
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::Light>(*lightEntity)->kind() == yorengine::Light::Kind::Spot);
+        CHECK(cameraDocument.redo());
+        EditorLightState invalidLight = editedLight;
+        invalidLight.intensity = -1.0f;
+        CHECK(!cameraDocument.setSelectedLight(invalidLight));
+        CHECK(cameraDocument.scene().component<yorengine::Light>(*lightEntity)->intensity() == 5.0f);
+        CHECK(cameraDocument.removeSelectedLight());
+        CHECK(!cameraDocument.scene().component<yorengine::Light>(*lightEntity));
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::Light>(*lightEntity));
+        cameraDocument.redo();
+        CHECK(!cameraDocument.scene().component<yorengine::Light>(*lightEntity));
 
         CHECK(cameraDocument.select(*targetEntity));
         CHECK(cameraDocument.addSelectedCamera());
