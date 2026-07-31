@@ -114,6 +114,48 @@ StudioUiCameraNoise cameraNoise(const EditorCameraNoiseState& value) {
     return result;
 }
 
+yorengine::Light::Kind lightKind(StudioUiLightKind value) {
+    switch (value) {
+    case StudioUiLightKind::directional: return yorengine::Light::Kind::Directional;
+    case StudioUiLightKind::point: return yorengine::Light::Kind::Point;
+    case StudioUiLightKind::spot: return yorengine::Light::Kind::Spot;
+    }
+    return yorengine::Light::Kind::Directional;
+}
+
+StudioUiLightKind lightKind(yorengine::Light::Kind value) {
+    switch (value) {
+    case yorengine::Light::Kind::Directional: return StudioUiLightKind::directional;
+    case yorengine::Light::Kind::Point: return StudioUiLightKind::point;
+    case yorengine::Light::Kind::Spot: return StudioUiLightKind::spot;
+    }
+    return StudioUiLightKind::directional;
+}
+
+EditorLightState light(const StudioUiLight& value) {
+    return {
+        lightKind(value.kind),
+        {value.color[0], value.color[1], value.color[2]},
+        value.intensity,
+        value.range,
+        value.innerConeDegrees,
+        value.outerConeDegrees,
+    };
+}
+
+StudioUiLight light(const EditorLightState& value) {
+    StudioUiLight result;
+    result.kind = lightKind(value.kind);
+    result.color[0] = value.color.x;
+    result.color[1] = value.color.y;
+    result.color[2] = value.color.z;
+    result.intensity = value.intensity;
+    result.range = value.range;
+    result.innerConeDegrees = value.innerConeDegrees;
+    result.outerConeDegrees = value.outerConeDegrees;
+    return result;
+}
+
 } // namespace
 
 StudioApplication::StudioApplication(std::filesystem::path recentProjectsPath)
@@ -239,6 +281,17 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
             status_ = "Cannot change camera noise.";
         }
         break;
+    case StudioUiCommand::addLight:
+        if (!editor_ || !editor_->addSelectedLight()) status_ = "Cannot add light.";
+        break;
+    case StudioUiCommand::removeLight:
+        if (!editor_ || !editor_->removeSelectedLight()) status_ = "Cannot remove light.";
+        break;
+    case StudioUiCommand::setLight:
+        if (!editor_ || !action.light || !editor_->setSelectedLight(light(*action.light))) {
+            status_ = "Cannot change light.";
+        }
+        break;
     case StudioUiCommand::undo:
         if (!editor_ || !editor_->undo()) status_ = "Nothing to undo.";
         break;
@@ -300,6 +353,7 @@ StudioUiFrame StudioApplication::frame() const {
             if (entity.camera) item.camera = camera(*entity.camera);
             if (entity.cameraKeyPoint) item.cameraKeyPoint = cameraKeyPoint(*entity.cameraKeyPoint);
             if (entity.cameraNoise) item.cameraNoise = cameraNoise(*entity.cameraNoise);
+            if (entity.light) item.light = light(*entity.light);
             result.sceneEntities.push_back(std::move(item));
         }
     }

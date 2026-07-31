@@ -31,6 +31,7 @@ private:
     StudioUiCamera editedCamera_;
     StudioUiCameraKeyPoint editedCameraKeyPoint_;
     StudioUiCameraNoise editedCameraNoise_;
+    StudioUiLight editedLight_;
     int editedLayer_ = 0;
     std::unordered_set<std::uint64_t> collapsedEntities_;
     unsigned int inspectedIndex_ = 0;

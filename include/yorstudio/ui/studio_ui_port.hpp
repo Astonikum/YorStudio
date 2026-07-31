@@ -51,6 +51,21 @@ struct StudioUiCameraNoise {
     unsigned int seed = 0;
 };
 
+enum class StudioUiLightKind {
+    directional,
+    point,
+    spot,
+};
+
+struct StudioUiLight {
+    StudioUiLightKind kind = StudioUiLightKind::directional;
+    float color[3] = {1.0f, 1.0f, 1.0f};
+    float intensity = 1.0f;
+    float range = 10.0f;
+    float innerConeDegrees = 15.0f;
+    float outerConeDegrees = 45.0f;
+};
+
 struct StudioUiEntity {
     unsigned int index = 0;
     unsigned int generation = 0;
@@ -66,6 +81,7 @@ struct StudioUiEntity {
     std::optional<StudioUiCamera> camera;
     std::optional<StudioUiCameraKeyPoint> cameraKeyPoint;
     std::optional<StudioUiCameraNoise> cameraNoise;
+    std::optional<StudioUiLight> light;
 };
 
 struct StudioUiFrame {
@@ -106,6 +122,9 @@ enum class StudioUiCommand {
     addCameraNoise,
     removeCameraNoise,
     setCameraNoise,
+    addLight,
+    removeLight,
+    setLight,
     undo,
     redo,
     saveScene,
@@ -129,6 +148,7 @@ struct StudioUiAction {
     std::optional<StudioUiCamera> camera;
     std::optional<StudioUiCameraKeyPoint> cameraKeyPoint;
     std::optional<StudioUiCameraNoise> cameraNoise;
+    std::optional<StudioUiLight> light;
 };
 
 class StudioUiPort {

@@ -49,6 +49,15 @@ void offsetSpaceCombo(const char* label, StudioUiCameraOffsetSpace& space) {
     }
 }
 
+void lightKindCombo(StudioUiLightKind& kind) {
+    const char* values[] = {"Directional", "Point", "Spot"};
+    int selected = kind == StudioUiLightKind::point ? 1 : kind == StudioUiLightKind::spot ? 2 : 0;
+    if (ImGui::Combo("Kind", &selected, values, 3)) {
+        kind = selected == 1 ? StudioUiLightKind::point
+            : selected == 2 ? StudioUiLightKind::spot : StudioUiLightKind::directional;
+    }
+}
+
 } // namespace
 
 ImGuiUiPort::ImGuiUiPort(Win32Window& window) : window_(window) {
@@ -229,6 +238,7 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
                 editedCamera_ = inspected->camera.value_or(StudioUiCamera{});
                 editedCameraKeyPoint_ = inspected->cameraKeyPoint.value_or(StudioUiCameraKeyPoint{});
                 editedCameraNoise_ = inspected->cameraNoise.value_or(StudioUiCameraNoise{});
+                editedLight_ = inspected->light.value_or(StudioUiLight{});
             }
             ImGui::InputText("Name", renameName_, sizeof(renameName_));
             if (ImGui::Button("Apply Name")) {
@@ -331,6 +341,26 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Remove Camera Noise")) action.command = StudioUiCommand::removeCameraNoise;
+                ImGui::PopID();
+            }
+
+            ImGui::TextUnformatted("Light");
+            if (!inspected->light) {
+                if (ImGui::Button("Add Light")) action.command = StudioUiCommand::addLight;
+            } else {
+                ImGui::PushID("Light");
+                lightKindCombo(editedLight_.kind);
+                ImGui::ColorEdit3("Color", editedLight_.color);
+                ImGui::DragFloat("Intensity", &editedLight_.intensity, 0.01f, 0.0f, 100000.0f);
+                ImGui::DragFloat("Range", &editedLight_.range, 0.1f, 0.001f, 100000.0f);
+                ImGui::DragFloat("Inner Cone", &editedLight_.innerConeDegrees, 0.1f, 0.0f, 180.0f);
+                ImGui::DragFloat("Outer Cone", &editedLight_.outerConeDegrees, 0.1f, 0.0f, 180.0f);
+                if (ImGui::Button("Apply Light")) {
+                    action.command = StudioUiCommand::setLight;
+                    action.light = editedLight_;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove Light")) action.command = StudioUiCommand::removeLight;
                 ImGui::PopID();
             }
         }
