@@ -22,6 +22,7 @@ struct ProjectPaths {
     std::filesystem::path manifestPath() const;
     std::filesystem::path hiddenStatePath() const;
     std::filesystem::path lockPath() const;
+    std::filesystem::path safeModePath() const;
 };
 
 class ProjectManifest {
@@ -42,6 +43,9 @@ public:
 
     static ProjectManifest fromJson(std::string_view text);
     static ProjectManifest read(const std::filesystem::path& path);
+
+    ProjectManifest rename(std::string newName) const;
+    ProjectManifest reidentify(std::string newName = {}) const;
 
     void writeAtomic(const std::filesystem::path& path) const;
     std::string toJson() const;
