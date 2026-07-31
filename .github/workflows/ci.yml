@@ -10,21 +10,29 @@ permissions:
 
 jobs:
   contracts:
-    name: Project contracts (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Native project contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Configure native build
+        run: cmake -S . -B build-native
+      - name: Build native contract
+        run: cmake --build build-native --config Release --parallel
       - name: Validate project template
-        run: python tools/validate_project.py templates/empty-project
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./build-native/Release/yorstudio_project_validate.exe templates/empty-project
+          else
+            ./build-native/yorstudio_project_validate templates/empty-project
+          fi
+      - name: Run native tests
+        run: ctest --test-dir build-native -C Release --output-on-failure
       - name: Check required contracts
         shell: bash
         run: |

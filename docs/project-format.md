@@ -26,6 +26,7 @@ MyGame/
     derived/                # disposable derived asset database
     logs/                   # editor/import/build logs
     generated/              # disposable generated code
+    recovery/               # disposable recovery markers
 ```
 
 The user-owned inputs are the manifest, `code/`, `assets/`, `scenes/`,
@@ -55,10 +56,22 @@ an asset or scene.
 }
 ```
 
-The actual launcher will validate UUIDs, paths, duplicate entries, supported
-versions, repository URLs, and toolchain constraints before loading project
-code, plugins, scripts, or import hooks. Manifest writes are atomic and retain
-unknown extension fields during migrations.
+The native C++ contract in `include/yorstudio/project_manifest.hpp` is the sole
+parser/validator surface for the launcher, editor, CLI, and CI. `ProjectManifest`
+creates, parses, migrates, serializes, and atomically writes manifests;
+`createProject` publishes a complete project directory through a sibling
+temporary directory; `validateProject` optionally validates the on-disk layout.
+No project code, plugin, script, or import hook is loaded by these operations.
+
+Manifest paths are stored with `/`, preserve case, reject absolute paths,
+parent/current-directory segments, drive/stream separators, empty segments,
+and control characters. Content roots must be unique and the startup scene must
+be inside one of them. Project roots and layout paths containing symbolic links
+are rejected during layout validation. The engine revision must be a `v`-release
+tag or a full immutable commit id; moving projects preserve `project_guid`.
+Manifest writes retain unknown top-level and nested extension fields during
+migrations and replace the destination only after the temporary file is fully
+written.
 
 ## Hidden state and safety
 
