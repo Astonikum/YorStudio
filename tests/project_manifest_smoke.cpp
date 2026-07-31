@@ -183,6 +183,21 @@ int main() {
         CHECK(validateProject(duplicated.root, false).projectGuid() != created.projectGuid());
         CHECK(!std::filesystem::exists(imported.root / "build"));
         CHECK(std::filesystem::equivalent(revealProject(workspaceRoots, imported.root), imported.root));
+        rejected = false;
+        try {
+            importProject(workspaceRoots, customPaths.root, temporary.path / "outside" / "Imported");
+        } catch (const ProjectOperationError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        rejected = false;
+        try {
+            duplicateProject(workspaceRoots, gamePaths.root, gamePaths.root);
+        } catch (const ProjectOperationError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+        CHECK(validateProject(gamePaths.root, false).name() == created.name());
 
         const auto legacyRoot = temporary.path / "Legacy";
         std::filesystem::create_directories(legacyRoot / ".yor");
@@ -278,6 +293,28 @@ int main() {
         CHECK(loadedRecent.entries().front().projectGuid == created.projectGuid());
         removeRecentProject(recent, customPaths.root);
         CHECK(recent.entries().size() == 1);
+
+        const auto corruptRecentPath = temporary.path / "corrupt.yorprojects";
+        {
+            std::ofstream corruptRecent(corruptRecentPath, std::ios::binary);
+            corruptRecent << "not json";
+        }
+        rejected = false;
+        try {
+            RecentProjects::read(corruptRecentPath);
+        } catch (const WorkspaceError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+
+        const auto movedRoot = temporary.path / "MovedSource";
+        const auto movedProject = createProject(movedRoot, ProjectManifest::create("Moved Project"));
+        RecentProjects movedRecent;
+        movedRecent.record(movedProject.root, ProjectManifest::read(movedProject.manifestPath()));
+        const auto movedDestination = temporary.path / "MovedDestination";
+        std::filesystem::rename(movedRoot, movedDestination);
+        removeRecentProject(movedRecent, movedRoot);
+        CHECK(movedRecent.entries().empty());
 
         const ProjectManifest replacement = ProjectManifest::create("Replacement");
         replacement.writeAtomic(paths.manifestPath());
