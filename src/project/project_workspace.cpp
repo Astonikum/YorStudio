@@ -46,14 +46,6 @@ fs::path canonicalDirectory(const fs::path& path, std::string_view field) {
     return canonical;
 }
 
-fs::path absoluteNormalized(const fs::path& path, std::string_view field) {
-    if (path.empty()) fail(field, "must not be empty");
-    std::error_code error;
-    const fs::path absolute = fs::absolute(path, error);
-    if (error) throw WorkspaceError(std::string(field) + ": cannot resolve path: " + error.message());
-    return absolute.lexically_normal();
-}
-
 std::string portablePath(const fs::path& path) {
     return path.lexically_normal().generic_string();
 }
@@ -319,9 +311,14 @@ void RecentProjects::record(const fs::path& projectRoot, const ProjectManifest& 
 }
 
 void RecentProjects::remove(const fs::path& projectRoot) {
-    const fs::path normalized = fs::is_directory(projectRoot) && !isSymlink(projectRoot)
-        ? canonicalDirectory(projectRoot, "project root")
-        : absoluteNormalized(projectRoot, "project root");
+    fs::path normalized;
+    if (fs::is_directory(projectRoot) && !isSymlink(projectRoot)) {
+        normalized = canonicalDirectory(projectRoot, "project root");
+    } else {
+        std::error_code error;
+        normalized = fs::weakly_canonical(projectRoot, error);
+        if (error) throw WorkspaceError("project root: cannot resolve path: " + error.message());
+    }
     const std::string key = portablePath(normalized);
     entries_.erase(
         std::remove_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
