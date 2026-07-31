@@ -8,10 +8,12 @@ YorStudio --Git tag/SHA--> YorEngine --Git tag/SHA--> YorGL
 
 Each repository builds and tests from a clean checkout. A dependency is added
 only when a public contract is consumed, not to reserve a future integration
-point. YorStudio's first native contract dependency is `nlohmann/json`, fetched
-by CMake at the immutable commit
-`9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03` (the v3.11.3 tag). The revision is
-declared in the root `CMakeLists.txt` and is tested by native contract CI.
+point. YorStudio's native contract dependency is `nlohmann/json`, fetched by
+CMake at the immutable commit `9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03`
+(the v3.11.3 tag). The Windows desktop target additionally fetches Dear ImGui
+at commit `9b4eb24cee2071e61dc1f9ef3e5228097cdde720` (the v1.92.9-docking tag)
+for its first UI adapter. Both revisions are declared in the root
+`CMakeLists.txt` and tested by native CI.
 
 When a dependency is introduced:
 

@@ -11,9 +11,8 @@ domain model.
 - YorGL provides the low-level C++ renderer/API boundary.
 - YorEngine provides C++ scene, components, Runtime, and RenderSnapshot
   contracts plus secondary C/JNI bindings.
-- No YorStudio desktop executable, editor state, asset database, or ImGui
-  dependency is checked in yet; the headless native manifest library and
-  validation CLI are present.
+- The first YorStudio desktop executable is a Windows/DirectX 11 target with a
+  pinned Dear ImGui adapter; editor state and asset database are still ahead.
 - C++ is authoritative; JVM/Kotlin/Java remains a secondary integration layer.
 
 ## Phase 0 - Product contracts and project format
@@ -27,10 +26,10 @@ domain model.
   behavior, project identity, and atomic manifest writes.
 - [x] Define the public project API used by launcher, editor, CLI, and CI;
   none of these clients may parse ad-hoc fields independently.
-- [ ] Define C++20 toolchain/platform support and the first Windows desktop
+- [x] Define C++20 toolchain/platform support and the first Windows desktop
   target without making Studio a dependency of runtime builds.
-- [ ] Define `StudioUiPort`, platform window/input ports, and a headless fake UI
-  port before adding Dear ImGui widgets.
+- [x] Define `StudioUiPort`, platform window/input ports, and a headless fake UI
+  port before adding Dear ImGui widgets; the contract smoke uses the fake port.
 
 Acceptance: a C++ contract test can create, serialize, validate, migrate, and
 reject bad manifests without starting a window or loading project code. This
@@ -49,8 +48,9 @@ acceptance is covered by `yorstudio_project_smoke`.
 - [x] Add read-only mode for projects that are already locked.
 - [ ] Add launcher tests for corrupt JSON/manifest, moved project, missing
   engine version, invalid path, locked project, and interrupted creation.
-- [ ] Add the first real window and ImGui adapter only after the launcher model
-  passes headless tests.
+- [x] Add the first real Windows window and ImGui adapter after the launcher
+  model passed headless tests; the adapter opens/closes a real project through
+  the public launcher lifecycle.
 
 Acceptance: a user can create and reopen an empty project from the launcher,
 and a corrupt cache never destroys `code/`, `assets/`, or `scenes/`.

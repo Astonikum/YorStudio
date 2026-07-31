@@ -4,10 +4,10 @@ YorStudio is the C++ desktop launcher and editor for YOR projects. It is a
 separate product above YorEngine and YorGL, designed for Unity-like authoring
 workflows while keeping the runtime usable without the editor.
 
-Status: inception. The repository currently contains the contracts and
-roadmap, not a fake executable or a placeholder ImGui window. The first
-working Studio milestone starts only after the project manifest, launcher
-lifecycle, platform window contract, and native render integration are tested.
+Status: first desktop slice. The repository contains the tested project
+contracts, launcher lifecycle, a native Windows/DX11 window, and a real ImGui
+launcher adapter. The editor model remains independent from both ImGui and the
+native window implementation.
 
 ## Product surfaces
 
