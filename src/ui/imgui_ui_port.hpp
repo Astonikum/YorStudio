@@ -2,6 +2,9 @@
 
 #include "yorstudio/ui/studio_ui_port.hpp"
 
+#include <cstdint>
+#include <unordered_set>
+
 namespace yorstudio {
 
 class Win32Window;
@@ -24,6 +27,7 @@ private:
     char newObjectName_[128] = "Object";
     char renameName_[128] = {};
     StudioUiTransform editedTransform_;
+    std::unordered_set<std::uint64_t> collapsedEntities_;
     unsigned int inspectedIndex_ = 0;
     unsigned int inspectedGeneration_ = 0;
 };
