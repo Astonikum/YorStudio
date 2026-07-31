@@ -41,6 +41,8 @@ struct EditorEntityState {
     yorengine::EntityId id{};
     std::string guid;
     std::string name;
+    std::vector<std::string> tags;
+    std::uint32_t layer = 0;
     yorengine::Transform transform{};
     bool active = true;
     bool selected = false;
@@ -64,6 +66,9 @@ public:
     bool duplicateSelected();
     bool setSelectedParent(std::optional<yorengine::EntityId> parent);
     bool setSelectedActive(bool active);
+    bool addSelectedTag(std::string tag);
+    bool removeSelectedTag(std::string tag);
+    bool setSelectedLayer(std::uint32_t layer);
     bool renameSelected(std::string name);
     bool setSelectedTransform(yorengine::Transform transform);
     void load(const std::filesystem::path& path);
@@ -80,6 +85,8 @@ private:
     struct ObjectSnapshot {
         std::string guid;
         std::string name;
+        std::vector<std::string> tags;
+        std::uint32_t layer = 0;
         yorengine::Transform transform{};
         bool active = true;
         std::optional<std::string> parentGuid;

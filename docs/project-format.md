@@ -86,6 +86,8 @@ project. The minimum shape is:
     {
       "guid": "a UUID",
       "name": "Player",
+      "tags": ["Player"],
+      "layer": 0,
       "active": true,
       "transform": {
         "position": [0, 0, 0],
@@ -99,6 +101,9 @@ project. The minimum shape is:
 ```
 
 `guid` values identify objects independently of runtime `EntityId` values.
+`tags` is an optional array of unique non-empty strings, and `layer` is an
+optional integer from 0 through 31; omitted values default to an empty tag list
+and layer 0.
 Parent references must resolve within the same file and may not form cycles.
 The native document loader rejects malformed version-1 data before it replaces
 the open scene. Scene saves use a sibling temporary file followed by an atomic

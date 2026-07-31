@@ -85,7 +85,7 @@ project, and document tests unchanged.
 - [x] Add collapsible hierarchy tree, entity create/delete/duplicate,
   parenting/reparenting,
   cycle errors, active state, and stable selection.
-- [ ] Add tags and layers.
+- [x] Add native tags and layers with scene persistence and inspector actions.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,

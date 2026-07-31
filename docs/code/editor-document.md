@@ -30,6 +30,10 @@ through the UI port without leaking YorEngine or ImGui types into the adapter.
 The ImGui adapter presents this data as a collapsible tree and keeps
 expanded/collapsed state local to the adapter.
 
+Tags and the 0-31 layer index are native YorEngine metadata exposed through
+the document model. They are validated before scene replacement, serialized as
+version-1 object fields, and edited through undoable inspector commands.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.
