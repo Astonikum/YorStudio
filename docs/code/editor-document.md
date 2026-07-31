@@ -53,6 +53,11 @@ color, intensity, range, and cone limits are validated by YorEngine before a
 command is committed. Kind changes replace the native Light with an undoable
 command so its immutable native kind stays authoritative.
 
+The desktop viewport consumes a `RenderSnapshot`-derived `StudioUiViewportFrame`
+and renders through a separate native YorGL DX11 child window. ImGui owns the
+editor chrome and layout; YorGL owns viewport swap-chain/render lifetime, so a
+future backend change does not leak renderer handles into the document model.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.

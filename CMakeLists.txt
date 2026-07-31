@@ -27,6 +27,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yorengine)
 
+set(YORGL_BUILD_JNI OFF CACHE BOOL "Disable YorGL JNI for YorStudio" FORCE)
+set(YORGL_BUILD_TESTS OFF CACHE BOOL "Disable YorGL tests inside YorStudio" FORCE)
+set(YORGL_BUILD_DX11 ${WIN32} CACHE BOOL "Build YorGL DX11 backend for YorStudio" FORCE)
+FetchContent_Declare(
+    yorgl
+    GIT_REPOSITORY https://github.com/Astonikum/YorGL.git
+    GIT_TAG 0497b11ed387e6dbe1528b7b3f90331d1a7c2deb
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(yorgl)
+
 add_library(yorstudio_project STATIC
     src/project/project_manifest.cpp
     src/project/project_lock.cpp
@@ -68,6 +79,7 @@ if(YORSTUDIO_BUILD_DESKTOP AND WIN32)
         ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
         src/ui/imgui_ui_port.cpp
+        src/ui/yorstudio_viewport.cpp
         src/platform/win32_window.cpp
     )
     target_compile_features(yorstudio_imgui PUBLIC cxx_std_20)
@@ -77,8 +89,9 @@ if(YORSTUDIO_BUILD_DESKTOP AND WIN32)
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
         src/platform
+        ${yorgl_SOURCE_DIR}/src
     )
-    target_link_libraries(yorstudio_imgui PUBLIC d3d11 dxgi dxguid imm32 shell32)
+    target_link_libraries(yorstudio_imgui PUBLIC yorgl d3d11 dxgi dxguid imm32 shell32)
 
     add_executable(yorstudio WIN32
         src/app/main.cpp
@@ -86,6 +99,10 @@ if(YORSTUDIO_BUILD_DESKTOP AND WIN32)
     target_compile_features(yorstudio PRIVATE cxx_std_20)
     target_include_directories(yorstudio PRIVATE src/platform src/ui)
     target_link_libraries(yorstudio PRIVATE yorstudio_app yorstudio_imgui ole32 shell32)
+    add_custom_command(TARGET yorstudio POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:yorgl> $<TARGET_FILE_DIR:yorstudio>
+    )
 endif()
 
 if(MSVC)

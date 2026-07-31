@@ -347,6 +347,8 @@ int main() {
         CHECK(application.frame().projectOpen);
         CHECK(application.frame().projectName == "Replacement");
         CHECK(application.frame().editorOpen);
+        CHECK(application.frame().viewport.sourceVersion > 0);
+        CHECK(application.frame().viewport.camera.farPlane == 512.0f);
         StudioUiAction createObject;
         createObject.command = StudioUiCommand::createObject;
         createObject.objectName = "Hero";

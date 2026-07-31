@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -66,6 +67,25 @@ struct StudioUiLight {
     float outerConeDegrees = 45.0f;
 };
 
+struct StudioUiRenderVertex {
+    float position[3] = {};
+    float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float uv[2] = {};
+};
+
+struct StudioUiViewportCamera {
+    float position[3] = {0.0f, 0.0f, -5.0f};
+    float direction[3] = {0.0f, 0.0f, 1.0f};
+    float fovYDegrees = 70.0f;
+    float farPlane = 512.0f;
+};
+
+struct StudioUiViewportFrame {
+    std::uint64_t sourceVersion = 0;
+    std::vector<StudioUiRenderVertex> vertices;
+    StudioUiViewportCamera camera;
+};
+
 struct StudioUiEntity {
     unsigned int index = 0;
     unsigned int generation = 0;
@@ -90,6 +110,7 @@ struct StudioUiFrame {
     std::string projectRoot;
     std::vector<StudioUiRecentProject> recentProjects;
     std::vector<StudioUiEntity> sceneEntities;
+    StudioUiViewportFrame viewport;
     bool editorOpen = false;
     bool sceneDirty = false;
     bool projectOpen = false;
