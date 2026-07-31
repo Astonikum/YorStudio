@@ -27,8 +27,11 @@ so CI remains visible. Use imperative commit subjects such as
 
 Before opening a pull request:
 
-```text
-python tools/validate_project.py templates/empty-project
+```powershell
+cmake -S . -B build-native
+cmake --build build-native --config Release --parallel
+ctest --test-dir build-native -C Release --output-on-failure
+build-native\Release\yorstudio_project_validate.exe templates/empty-project
 git diff --check
 ```
 

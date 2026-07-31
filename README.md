@@ -4,10 +4,11 @@ YorStudio is the C++ desktop launcher and editor for projects built with the
 YOR ecosystem. It will provide a Unity/Unreal-style authoring workflow while
 keeping the shipped game independent from the editor.
 
-This repository is intentionally at the project-contract stage. It contains
-the public project format, launcher/editor rules, template, roadmap, and
-validation CI. Product code is added only with a tested vertical slice; an
-empty ImGui window would not prove the editor architecture.
+This repository is intentionally at the headless project-contract stage. It
+contains a tested C++20 manifest library and validation CLI, the public project
+format, launcher/editor rules, template, roadmap, and native CI. Product code
+is added only with a tested vertical slice; an empty ImGui window would not
+prove the editor architecture.
 
 ## YOR repositories
 
@@ -38,12 +39,16 @@ editor model: project, scene, command, and content code must depend on a small
 
 ## Current verification
 
-```text
-python tools/validate_project.py templates/empty-project
+```powershell
+cmake -S . -B build-native
+cmake --build build-native --config Release --parallel
+ctest --test-dir build-native -C Release --output-on-failure
+build-native\Release\yorstudio_project_validate.exe templates/empty-project
 ```
 
 The first implementation milestone is the tested, headless project/launcher
-contract. The executable and ImGui adapter begin after that contract is stable.
+contract. The desktop executable and ImGui adapter begin after that contract
+is stable.
 
 ## License
 

@@ -11,28 +11,30 @@ domain model.
 - YorGL provides the low-level C++ renderer/API boundary.
 - YorEngine provides C++ scene, components, Runtime, and RenderSnapshot
   contracts plus secondary C/JNI bindings.
-- No YorStudio executable, project manifest parser, editor state, asset
-  database, or ImGui dependency is checked in yet.
+- No YorStudio desktop executable, editor state, asset database, or ImGui
+  dependency is checked in yet; the headless native manifest library and
+  validation CLI are present.
 - C++ is authoritative; JVM/Kotlin/Java remains a secondary integration layer.
 
 ## Phase 0 - Product contracts and project format
 
-- [ ] Add a versioned `project.yorproject` manifest schema: project GUID,
+- [x] Add a versioned `project.yorproject` manifest schema: project GUID,
   display name, engine version, toolchain, startup scene, target platforms,
   enabled modules, content roots, and editor settings.
-- [ ] Define the `.yor/` hidden-state policy for lock, editor state, logs,
+- [x] Define the `.yor/` hidden-state policy for lock, editor state, logs,
   caches, derived assets, generated code, and recovery markers.
-- [ ] Define path normalization, case sensitivity, symlink policy, project move
+- [x] Define path normalization, case sensitivity, symlink policy, project move
   behavior, project identity, and atomic manifest writes.
-- [ ] Define the public project API used by launcher, editor, CLI, and CI;
+- [x] Define the public project API used by launcher, editor, CLI, and CI;
   none of these clients may parse ad-hoc fields independently.
 - [ ] Define C++20 toolchain/platform support and the first Windows desktop
   target without making Studio a dependency of runtime builds.
 - [ ] Define `StudioUiPort`, platform window/input ports, and a headless fake UI
   port before adding Dear ImGui widgets.
 
-Acceptance: a schema test can create, serialize, validate, migrate, and reject
-bad manifests without starting a window or loading project code.
+Acceptance: a C++ contract test can create, serialize, validate, migrate, and
+reject bad manifests without starting a window or loading project code. This
+acceptance is covered by `yorstudio_project_smoke`.
 
 ## Phase 1 - Launcher and project lifecycle
 

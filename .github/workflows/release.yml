@@ -14,12 +14,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Validate template
-        run: python tools/validate_project.py templates/empty-project
+      - name: Build native contracts
+        run: |
+          cmake -S . -B build-release
+          cmake --build build-release --config Release --parallel
+          ctest --test-dir build-release -C Release --output-on-failure
+          ./build-release/yorstudio_project_validate templates/empty-project
       - name: Create source package
         run: |
           archive="YorStudio-${GITHUB_REF_NAME}.tar.gz"
-          tar -czf "$archive" README.md LICENSE docs templates tools .github
+          tar -czf "$archive" README.md LICENSE CMakeLists.txt docs templates include src tests .github
           echo "archive=$archive" >> "$GITHUB_ENV"
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
