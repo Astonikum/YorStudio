@@ -274,7 +274,9 @@ void RecentProjects::record(const fs::path& projectRoot, const ProjectManifest& 
 }
 
 void RecentProjects::remove(const fs::path& projectRoot) {
-    const fs::path normalized = absoluteNormalized(projectRoot, "project root");
+    const fs::path normalized = fs::is_directory(projectRoot) && !isSymlink(projectRoot)
+        ? canonicalDirectory(projectRoot, "project root")
+        : absoluteNormalized(projectRoot, "project root");
     const std::string key = portablePath(normalized);
     entries_.erase(
         std::remove_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
