@@ -43,6 +43,7 @@ yorstudio/
     notifications.*
   project/
     project_manifest.*
+    project_workspace.*
     project_paths.*
     project_registry.*
     project_validator.*

@@ -90,6 +90,29 @@ written.
 - Safe mode disables third-party modules and offers reset of disposable state.
 - Move/copy operations preserve `project_guid`; a duplicate gets a new identity.
 
+## Workspace roots and recent projects
+
+Workspace roots are an explicit native C++ JSON contract, not a recursive
+filesystem search:
+
+```json
+{
+  "schema_version": 1,
+  "roots": ["C:/YOR/Projects"]
+}
+```
+
+`WorkspaceRoots::discover` inspects only each configured root and its direct
+child directories. It validates a candidate manifest without executing project
+code and returns invalid candidates as diagnostics. Symlink roots and symlink
+project directories are rejected; directories outside the configured roots are
+never eligible for launcher discovery.
+
+The recent-project registry is also versioned JSON and is written atomically.
+It stores at most 32 absolute project paths with project GUID, display name, and
+UTC last-opened time. Recording a project moves it to the front, while removing
+a recent entry never removes project files.
+
 ## Git dependencies
 
 YorStudio will consume YorEngine through CMake `FetchContent` or an equivalent

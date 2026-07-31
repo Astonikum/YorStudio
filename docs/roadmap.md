@@ -38,11 +38,11 @@ acceptance is covered by `yorstudio_project_smoke`.
 
 ## Phase 1 - Launcher and project lifecycle
 
-- [ ] Implement workspace roots and recent-project registry with safe path
+- [x] Implement workspace roots and recent-project registry with safe path
   validation and no implicit recursive scanning outside configured roots.
 - [ ] Implement New, Open, Import, Duplicate, Migrate, Remove Recent, Reveal,
   Safe Mode, Reset Disposable State, and Recover flows.
-- [ ] Create project directories atomically; clean up partial creation after a
+- [x] Create project directories atomically; clean up partial creation after a
   failure without deleting an existing project.
 - [x] Add project lock ownership, explicit local stale-lock recovery, and clear
   diagnostics for two Studio instances opening the same project.
