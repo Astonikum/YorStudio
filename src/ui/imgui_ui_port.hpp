@@ -15,11 +15,12 @@ public:
     ImGuiUiPort& operator=(const ImGuiUiPort&) = delete;
 
     void beginFrame() override;
-    StudioUiCommand draw(const StudioUiFrame& frame) override;
+    StudioUiAction draw(const StudioUiFrame& frame) override;
     void endFrame() override;
 
 private:
     Win32Window& window_;
+    char newProjectName_[128] = "NewYORProject";
 };
 
 } // namespace yorstudio

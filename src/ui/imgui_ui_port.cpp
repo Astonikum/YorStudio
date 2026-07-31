@@ -36,16 +36,17 @@ void ImGuiUiPort::beginFrame() {
     ImGui::NewFrame();
 }
 
-StudioUiCommand ImGuiUiPort::draw(const StudioUiFrame& frame) {
-    StudioUiCommand command = StudioUiCommand::none;
+StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
+    StudioUiAction action;
     ImGui::DockSpaceOverViewport();
 
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Open Project...")) command = StudioUiCommand::chooseProject;
-            if (frame.projectOpen && ImGui::MenuItem("Close Project")) command = StudioUiCommand::closeProject;
+            if (ImGui::MenuItem("Open Project...")) action.command = StudioUiCommand::chooseProject;
+            if (ImGui::MenuItem("New Project...")) ImGui::OpenPopup("New Project");
+            if (frame.projectOpen && ImGui::MenuItem("Close Project")) action.command = StudioUiCommand::closeProject;
             ImGui::Separator();
-            if (ImGui::MenuItem("Quit")) command = StudioUiCommand::quit;
+            if (ImGui::MenuItem("Quit")) action.command = StudioUiCommand::quit;
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
@@ -58,15 +59,42 @@ StudioUiCommand ImGuiUiPort::draw(const StudioUiFrame& frame) {
         ImGui::Text("Project: %s", frame.projectName.c_str());
         ImGui::TextWrapped("Root: %s", frame.projectRoot.c_str());
         if (frame.readOnly) ImGui::TextUnformatted("Access: read-only");
-        if (ImGui::Button("Close Project")) command = StudioUiCommand::closeProject;
+        if (ImGui::Button("Close Project")) action.command = StudioUiCommand::closeProject;
     } else {
         ImGui::TextUnformatted("No project is open.");
-        if (ImGui::Button("Open Project...")) command = StudioUiCommand::chooseProject;
+        if (ImGui::Button("Open Project...")) action.command = StudioUiCommand::chooseProject;
+        ImGui::SameLine();
+        if (ImGui::Button("New Project...")) ImGui::OpenPopup("New Project");
+    }
+    if (!frame.recentProjects.empty()) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Recent projects");
+        for (const auto& recent : frame.recentProjects) {
+            ImGui::PushID(recent.root.c_str());
+            if (ImGui::Selectable(recent.name.c_str())) {
+                action.command = StudioUiCommand::openRecentProject;
+                action.projectRoot = recent.root;
+            }
+            ImGui::TextDisabled("%s", recent.root.c_str());
+            ImGui::PopID();
+        }
     }
     ImGui::Spacing();
     ImGui::TextWrapped("Status: %s", frame.status.c_str());
     ImGui::End();
-    return command;
+
+    if (ImGui::BeginPopupModal("New Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("Project name", newProjectName_, sizeof(newProjectName_));
+        if (ImGui::Button("Create")) {
+            action.command = StudioUiCommand::newProject;
+            action.projectName = newProjectName_;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    return action;
 }
 
 void ImGuiUiPort::endFrame() {

@@ -5,8 +5,9 @@ YOR ecosystem. It will provide a Unity/Unreal-style authoring workflow while
 keeping the shipped game independent from the editor.
 
 The first tested C++20 desktop slice is now available on Windows: a native
-Win32/DX11 window with a dockable Dear ImGui launcher can open and close a real
-YOR project through the same manifest and lock lifecycle used by headless CI.
+Win32/DX11 window with a dockable Dear ImGui launcher can create, reopen, and
+close real YOR projects through the same manifest, recent-registry, and lock
+lifecycle used by headless CI.
 The editor model does not depend on ImGui, so the adapter can be replaced later.
 
 ## YOR repositories

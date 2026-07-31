@@ -23,6 +23,8 @@ public:
     bool beginRender();
     void present();
     std::filesystem::path browseForProject() const;
+    std::filesystem::path browseForDirectory(std::wstring_view title) const;
+    std::filesystem::path recentProjectsPath() const;
     void setMessageHandler(MessageHandler handler) noexcept { messageHandler_ = handler; }
 
     HWND handle() const noexcept { return window_; }

@@ -138,9 +138,13 @@ void Win32Window::present() {
 }
 
 std::filesystem::path Win32Window::browseForProject() const {
+    return browseForDirectory(L"Select a YOR project directory");
+}
+
+std::filesystem::path Win32Window::browseForDirectory(std::wstring_view title) const {
     BROWSEINFOW browseInfo{
         .hwndOwner = window_,
-        .lpszTitle = L"Select a YOR project directory",
+        .lpszTitle = title.data(),
         .ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
     };
     PIDLIST_ABSOLUTE selected = SHBrowseForFolderW(&browseInfo);
@@ -149,6 +153,14 @@ std::filesystem::path Win32Window::browseForProject() const {
     const bool resolved = SHGetPathFromIDListW(selected, path.data());
     CoTaskMemFree(selected);
     return resolved ? std::filesystem::path(path.data()) : std::filesystem::path{};
+}
+
+std::filesystem::path Win32Window::recentProjectsPath() const {
+    std::array<wchar_t, MAX_PATH> localAppData{};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, localAppData.data()))) {
+        return {};
+    }
+    return std::filesystem::path(localAppData.data()) / L"YOR" / L"YorStudio" / L"recent.yorprojects";
 }
 
 LRESULT CALLBACK Win32Window::windowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
