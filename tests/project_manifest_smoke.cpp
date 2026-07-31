@@ -3,8 +3,10 @@
 #include "yorstudio/project_lifecycle.hpp"
 #include "yorstudio/project_workspace.hpp"
 #include "yorstudio/studio_application.hpp"
+#include "yorstudio/ui/viewport_math.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -349,6 +351,14 @@ int main() {
         CHECK(application.frame().editorOpen);
         CHECK(application.frame().viewport.sourceVersion > 0);
         CHECK(application.frame().viewport.camera.farPlane == 512.0f);
+        const auto centerRay = viewportRayFromScreen(application.frame().viewport.camera, 49.5f, 49.5f, 100.0f, 100.0f);
+        CHECK(std::abs(centerRay.direction[0]) < 0.001f);
+        CHECK(std::abs(centerRay.direction[1]) < 0.001f);
+        CHECK(centerRay.direction[2] > 0.99f);
+        float centerHitDistance = 0.0f;
+        CHECK(viewportIntersectTriangle(
+            centerRay, {-1.0f, -1.0f, 0.0f}, {1.0f, -1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, centerHitDistance));
+        CHECK(std::abs(centerHitDistance - 5.0f) < 0.001f);
         StudioUiAction createObject;
         createObject.command = StudioUiCommand::createObject;
         createObject.objectName = "Hero";
@@ -408,6 +418,8 @@ int main() {
         CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::point);
         application.handle({StudioUiCommand::addTriangle});
         CHECK(application.frame().sceneEntities.front().mesh->vertexCount == 3);
+        CHECK(application.frame().viewport.entities.size() == 1);
+        CHECK(application.frame().viewport.entities.front().vertexCount == 3);
         application.handle({StudioUiCommand::undo});
         CHECK(!application.frame().sceneEntities.front().mesh.has_value());
         application.handle({StudioUiCommand::redo});

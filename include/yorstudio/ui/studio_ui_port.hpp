@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -84,10 +85,24 @@ struct StudioUiViewportCamera {
     float farPlane = 512.0f;
 };
 
+struct StudioUiViewportEntity {
+    unsigned int index = 0;
+    unsigned int generation = 0;
+    std::size_t firstVertex = 0;
+    std::size_t vertexCount = 0;
+};
+
+struct StudioUiViewportSelection {
+    unsigned int index = 0;
+    unsigned int generation = 0;
+};
+
 struct StudioUiViewportFrame {
     std::uint64_t sourceVersion = 0;
     std::vector<StudioUiRenderVertex> vertices;
     StudioUiViewportCamera camera;
+    std::string sceneKey;
+    std::vector<StudioUiViewportEntity> entities;
 };
 
 struct StudioUiEntity {

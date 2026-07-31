@@ -160,8 +160,9 @@ StudioUiLight light(const EditorLightState& value) {
     return result;
 }
 
-StudioUiViewportFrame viewport(const yorengine::Scene& scene) {
+StudioUiViewportFrame viewport(const yorengine::Scene& scene, std::string sceneKey) {
     StudioUiViewportFrame result;
+    result.sceneKey = std::move(sceneKey);
     const auto snapshot = scene.captureRenderSnapshot();
     result.sourceVersion = snapshot.sourceVersion();
     bool cameraFound = false;
@@ -178,6 +179,14 @@ StudioUiViewportFrame viewport(const yorengine::Scene& scene) {
             result.camera.fovYDegrees = entity.camera->fovYDegrees;
             result.camera.farPlane = entity.camera->farPlane;
             cameraFound = true;
+        }
+        if (!entity.meshVertices.empty()) {
+            result.entities.push_back({
+                entity.entity.index,
+                entity.entity.generation,
+                result.vertices.size(),
+                entity.meshVertices.size(),
+            });
         }
         for (const auto& vertex : entity.meshVertices) {
             const auto position = entity.worldMatrix.transformPoint(vertex.position);
@@ -384,7 +393,7 @@ StudioUiFrame StudioApplication::frame() const {
     if (editor_) {
         result.editorOpen = true;
         result.sceneDirty = editor_->dirty();
-        result.viewport = viewport(editor_->scene());
+        result.viewport = viewport(editor_->scene(), editor_->scenePath().string());
         for (const auto& entity : editor_->entities()) {
             StudioUiEntity item;
             item.index = entity.id.index;
