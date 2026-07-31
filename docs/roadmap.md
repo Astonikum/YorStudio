@@ -94,6 +94,8 @@ project, and document tests unchanged.
   kind, color, intensity, range, cone validation, and undo/redo.
 - [x] Add a real YorGL DX11 child viewport fed by YorEngine RenderSnapshot
   geometry and camera state.
+- [x] Persist native Mesh vertices and add undoable empty/triangle/remove mesh
+  actions so the viewport can contain authored geometry.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Extend the viewport with editor grid/axes, camera navigation,

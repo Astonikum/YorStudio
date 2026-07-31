@@ -373,6 +373,16 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
                 if (ImGui::Button("Remove Light")) action.command = StudioUiCommand::removeLight;
                 ImGui::PopID();
             }
+
+            ImGui::TextUnformatted("Mesh");
+            if (!inspected->mesh) {
+                if (ImGui::Button("Add Empty Mesh")) action.command = StudioUiCommand::addMesh;
+                ImGui::SameLine();
+                if (ImGui::Button("Add Triangle Mesh")) action.command = StudioUiCommand::addTriangle;
+            } else {
+                ImGui::Text("Vertices: %u", inspected->mesh->vertexCount);
+                if (ImGui::Button("Remove Mesh")) action.command = StudioUiCommand::removeMesh;
+            }
         }
         ImGui::End();
     }

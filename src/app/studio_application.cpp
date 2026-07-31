@@ -2,7 +2,9 @@
 
 #include <yorengine/render_snapshot.hpp>
 
+#include <algorithm>
 #include <exception>
+#include <limits>
 #include <utility>
 
 namespace yorstudio {
@@ -331,6 +333,15 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
             status_ = "Cannot change light.";
         }
         break;
+    case StudioUiCommand::addMesh:
+        if (!editor_ || !editor_->addSelectedMesh()) status_ = "Cannot add mesh.";
+        break;
+    case StudioUiCommand::addTriangle:
+        if (!editor_ || !editor_->addSelectedTriangle()) status_ = "Cannot add triangle mesh.";
+        break;
+    case StudioUiCommand::removeMesh:
+        if (!editor_ || !editor_->removeSelectedMesh()) status_ = "Cannot remove mesh.";
+        break;
     case StudioUiCommand::undo:
         if (!editor_ || !editor_->undo()) status_ = "Nothing to undo.";
         break;
@@ -394,6 +405,10 @@ StudioUiFrame StudioApplication::frame() const {
             if (entity.cameraKeyPoint) item.cameraKeyPoint = cameraKeyPoint(*entity.cameraKeyPoint);
             if (entity.cameraNoise) item.cameraNoise = cameraNoise(*entity.cameraNoise);
             if (entity.light) item.light = light(*entity.light);
+            if (entity.mesh) {
+                item.mesh = StudioUiMesh{static_cast<unsigned int>(std::min<std::size_t>(
+                    entity.mesh->vertices.size(), (std::numeric_limits<unsigned int>::max)()))};
+            }
             result.sceneEntities.push_back(std::move(item));
         }
     }

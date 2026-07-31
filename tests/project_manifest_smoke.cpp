@@ -406,6 +406,12 @@ int main() {
         CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::directional);
         application.handle({StudioUiCommand::redo});
         CHECK(application.frame().sceneEntities.front().light->kind == StudioUiLightKind::point);
+        application.handle({StudioUiCommand::addTriangle});
+        CHECK(application.frame().sceneEntities.front().mesh->vertexCount == 3);
+        application.handle({StudioUiCommand::undo});
+        CHECK(!application.frame().sceneEntities.front().mesh.has_value());
+        application.handle({StudioUiCommand::redo});
+        CHECK(application.frame().sceneEntities.front().mesh->vertexCount == 3);
         application.handle({StudioUiCommand::saveScene});
         CHECK(!application.frame().sceneDirty);
         nlohmann::json savedScene;
@@ -511,6 +517,16 @@ int main() {
             {"guid", targetGuid}, {"name", "Target"},
             {"transform", {{"position", {10.0f, 2.0f, -3.0f}}}},
         };
+        auto& meshVerticesJson = targetObject["components"]["mesh"]["vertices"];
+        meshVerticesJson.push_back({
+            {"position", {-1.0f, -1.0f, 0.0f}}, {"color", {1.0f, 0.0f, 0.0f, 1.0f}}, {"uv", {0.0f, 1.0f}},
+        });
+        meshVerticesJson.push_back({
+            {"position", {1.0f, -1.0f, 0.0f}}, {"color", {0.0f, 1.0f, 0.0f, 1.0f}}, {"uv", {1.0f, 1.0f}},
+        });
+        meshVerticesJson.push_back({
+            {"position", {0.0f, 1.0f, 0.0f}}, {"color", {0.0f, 0.0f, 1.0f, 1.0f}}, {"uv", {0.5f, 0.0f}},
+        });
         nlohmann::json lightObject = {
             {"guid", lightGuid}, {"name", "Sun"},
             {"components", {{"light", {
@@ -550,12 +566,15 @@ int main() {
         CHECK(shotNoise->seed() == 42);
         const auto* sun = cameraDocument.scene().component<yorengine::Light>(*lightEntity);
         CHECK(sun && sun->kind() == yorengine::Light::Kind::Spot && sun->intensity() == 3.0f);
+        const auto* targetMesh = cameraDocument.scene().component<yorengine::Mesh>(*targetEntity);
+        CHECK(targetMesh && targetMesh->vertices().size() == 3);
         for (const auto& state : cameraDocument.entities()) {
             if (state.id == *shotEntity) {
                 CHECK(state.cameraKeyPoint && state.cameraNoise);
                 CHECK(state.cameraKeyPoint->followTargetGuid == targetGuid);
                 CHECK(state.cameraNoise->frequency == 2.0f);
             }
+            if (state.id == *targetEntity) CHECK(state.mesh && state.mesh->vertices.size() == 3);
         }
         CHECK(cameraDocument.select(*shotEntity));
         CHECK(cameraDocument.duplicateSelected());
@@ -627,6 +646,17 @@ int main() {
         cameraDocument.redo();
         CHECK(!cameraDocument.scene().component<yorengine::Light>(*lightEntity));
 
+        CHECK(cameraDocument.select(*brainEntity));
+        CHECK(cameraDocument.addSelectedTriangle());
+        CHECK(cameraDocument.scene().component<yorengine::Mesh>(*brainEntity)->vertices().size() == 3);
+        CHECK(cameraDocument.undo());
+        CHECK(!cameraDocument.scene().component<yorengine::Mesh>(*brainEntity));
+        CHECK(cameraDocument.redo());
+        CHECK(cameraDocument.removeSelectedMesh());
+        CHECK(!cameraDocument.scene().component<yorengine::Mesh>(*brainEntity));
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::Mesh>(*brainEntity)->vertices().size() == 3);
+
         CHECK(cameraDocument.select(*targetEntity));
         CHECK(cameraDocument.addSelectedCamera());
         CHECK(cameraDocument.scene().component<yorengine::Camera>(*targetEntity));
@@ -646,7 +676,14 @@ int main() {
             sceneFile >> cameraScene;
         }
         for (const auto& object : cameraScene["objects"]) {
-            if (object["guid"] == targetGuid) CHECK(!object.contains("components"));
+            if (object["guid"] == brainGuid) CHECK(object["components"]["mesh"]["vertices"].size() == 3);
+        }
+        for (const auto& object : cameraScene["objects"]) {
+            if (object["guid"] == targetGuid) {
+                CHECK(object.contains("components"));
+                CHECK(object["components"].contains("mesh"));
+                CHECK(!object["components"].contains("camera"));
+            }
         }
 
         auto invalidCameraScene = cameraScene;

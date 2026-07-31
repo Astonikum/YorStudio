@@ -67,6 +67,10 @@ struct StudioUiLight {
     float outerConeDegrees = 45.0f;
 };
 
+struct StudioUiMesh {
+    unsigned int vertexCount = 0;
+};
+
 struct StudioUiRenderVertex {
     float position[3] = {};
     float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -102,6 +106,7 @@ struct StudioUiEntity {
     std::optional<StudioUiCameraKeyPoint> cameraKeyPoint;
     std::optional<StudioUiCameraNoise> cameraNoise;
     std::optional<StudioUiLight> light;
+    std::optional<StudioUiMesh> mesh;
 };
 
 struct StudioUiFrame {
@@ -146,6 +151,9 @@ enum class StudioUiCommand {
     addLight,
     removeLight,
     setLight,
+    addMesh,
+    addTriangle,
+    removeMesh,
     undo,
     redo,
     saveScene,

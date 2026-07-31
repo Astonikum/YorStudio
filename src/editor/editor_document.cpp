@@ -86,8 +86,53 @@ nlohmann::json vector3Json(yorengine::Vec3 value) {
     return {value.x, value.y, value.z};
 }
 
+nlohmann::json colorJson(float r, float g, float b, float a) {
+    return {r, g, b, a};
+}
+
+nlohmann::json uvJson(float u, float v) {
+    return {u, v};
+}
+
 nlohmann::json quaternionJson(yorengine::Quaternion value) {
     return {value.x, value.y, value.z, value.w};
+}
+
+yorengine::MeshVertex meshVertex(const nlohmann::json& value, std::string_view path) {
+    if (!value.is_object()) throw EditorDocumentError(std::string("scene: ") + std::string(path) + " must be an object");
+    yorengine::MeshVertex result;
+    if (value.contains("position")) result.position = vector3(value.at("position"), std::string(path) + ".position");
+    if (value.contains("color")) {
+        const auto& color = value.at("color");
+        if (!color.is_array() || color.size() != 4) {
+            throw EditorDocumentError(std::string("scene: ") + std::string(path) + ".color must have four values");
+        }
+        result.r = number(color[0], std::string(path) + ".color");
+        result.g = number(color[1], std::string(path) + ".color");
+        result.b = number(color[2], std::string(path) + ".color");
+        result.a = number(color[3], std::string(path) + ".color");
+    }
+    if (value.contains("uv")) {
+        const auto& uv = value.at("uv");
+        if (!uv.is_array() || uv.size() != 2) {
+            throw EditorDocumentError(std::string("scene: ") + std::string(path) + ".uv must have two values");
+        }
+        result.u = number(uv[0], std::string(path) + ".uv");
+        result.v = number(uv[1], std::string(path) + ".uv");
+    }
+    return result;
+}
+
+std::vector<yorengine::MeshVertex> meshVertices(const nlohmann::json& value, std::string_view path) {
+    if (!value.is_array()) throw EditorDocumentError(std::string("scene: ") + std::string(path) + " must be an array");
+    constexpr std::size_t maxVertices = 1'000'000;
+    if (value.size() > maxVertices) throw EditorDocumentError(std::string("scene: ") + std::string(path) + " has too many vertices");
+    std::vector<yorengine::MeshVertex> result;
+    result.reserve(value.size());
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        result.push_back(meshVertex(value[index], std::string(path) + "[" + std::to_string(index) + "]"));
+    }
+    return result;
 }
 
 struct LensValues {
@@ -259,6 +304,12 @@ void applyKnownComponents(yorengine::Scene& scene, yorengine::EntityId entity,
         light.setCone(numberField(*lightData, "inner_cone_degrees", 15.0f, "components.light"),
                       numberField(*lightData, "outer_cone_degrees", 45.0f, "components.light"));
     }
+    if (const auto* meshData = componentJson(extensions, "mesh")) {
+        const auto vertices = meshData->contains("vertices")
+            ? meshVertices(meshData->at("vertices"), "components.mesh.vertices")
+            : std::vector<yorengine::MeshVertex>{};
+        object.add<yorengine::Mesh>(vertices);
+    }
 }
 
 template <typename CameraLike>
@@ -345,6 +396,14 @@ std::string lightKindJson(yorengine::Light::Kind kind) {
     throw EditorDocumentError("scene: light kind is invalid");
 }
 
+std::vector<yorengine::MeshVertex> triangleVertices() {
+    return {
+        {{-1.0f, -1.0f, 0.0f}, 0.95f, 0.25f, 0.25f, 1.0f, 0.0f, 1.0f},
+        {{1.0f, -1.0f, 0.0f}, 0.25f, 0.95f, 0.35f, 1.0f, 1.0f, 1.0f},
+        {{0.0f, 1.0f, 0.0f}, 0.25f, 0.45f, 1.0f, 1.0f, 0.5f, 0.0f},
+    };
+}
+
 std::string offsetSpaceJson(yorengine::CameraOffsetSpace space) {
     return space == yorengine::CameraOffsetSpace::World ? "world" : "target_local";
 }
@@ -406,6 +465,17 @@ nlohmann::json knownComponents(const yorengine::Scene& scene, yorengine::EntityI
             {"inner_cone_degrees", light->innerConeDegrees()},
             {"outer_cone_degrees", light->outerConeDegrees()},
         };
+    }
+    if (const auto* mesh = scene.component<yorengine::Mesh>(entity)) {
+        nlohmann::json vertices = nlohmann::json::array();
+        for (const auto& vertex : mesh->vertices()) {
+            vertices.push_back({
+                {"position", vector3Json(vertex.position)},
+                {"color", colorJson(vertex.r, vertex.g, vertex.b, vertex.a)},
+                {"uv", uvJson(vertex.u, vertex.v)},
+            });
+        }
+        result["mesh"] = {{"vertices", std::move(vertices)}};
     }
     return result;
 }
@@ -550,6 +620,9 @@ std::vector<EditorEntityState> EditorDocument::entities() {
                 light->kind(), light->color(), light->intensity(), light->range(),
                 light->innerConeDegrees(), light->outerConeDegrees(),
             };
+        }
+        if (const auto* mesh = object.component<yorengine::Mesh>()) {
+            state.mesh = EditorMeshState{mesh->vertices()};
         }
         result.push_back(std::move(state));
     }
@@ -1262,6 +1335,67 @@ bool EditorDocument::setSelectedLight(EditorLightState state) {
     });
 }
 
+bool EditorDocument::addSelectedMesh() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::Mesh>(*selected)) return false;
+    return commit({
+        "Add Mesh",
+        [selected](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::Mesh>();
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Mesh>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::addSelectedTriangle() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::Mesh>(*selected)) return false;
+    const auto vertices = triangleVertices();
+    return commit({
+        "Add Triangle Mesh",
+        [selected, vertices](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::Mesh>(vertices);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Mesh>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedMesh() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::Mesh>(*selected);
+    if (!current) return false;
+    const auto vertices = current->vertices();
+    return commit({
+        "Remove Mesh",
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Mesh>(*selected); },
+        [selected, vertices](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::Mesh>(vertices);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
 void EditorDocument::load(const std::filesystem::path& path) {
     if (path.empty()) throw EditorDocumentError("scene: path must not be empty");
     std::ifstream stream(path, std::ios::binary);
@@ -1473,6 +1607,7 @@ void EditorDocument::save() {
         if (!state.cameraKeyPoint) components.erase("camera_key_point");
         if (!state.cameraNoise) components.erase("camera_noise");
         if (!state.light) components.erase("light");
+        if (!state.mesh) components.erase("mesh");
         if (components.empty()) object.erase("components");
         else object["components"] = std::move(components);
         const auto parentEntity = scene_.parent(state.id);
