@@ -2,6 +2,7 @@
 #include "yorstudio/project_lock.hpp"
 #include "yorstudio/project_lifecycle.hpp"
 #include "yorstudio/project_workspace.hpp"
+#include "yorstudio/studio_application.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -29,6 +30,23 @@ struct TemporaryDirectory {
         std::error_code error;
         std::filesystem::remove_all(path, error);
     }
+};
+
+class FakeUiPort final : public yorstudio::StudioUiPort {
+public:
+    void beginFrame() override { ++beginCount; }
+
+    yorstudio::StudioUiCommand draw(const yorstudio::StudioUiFrame& frame) override {
+        lastFrame = frame;
+        return nextCommand;
+    }
+
+    void endFrame() override { ++endCount; }
+
+    int beginCount = 0;
+    int endCount = 0;
+    yorstudio::StudioUiCommand nextCommand = yorstudio::StudioUiCommand::none;
+    yorstudio::StudioUiFrame lastFrame;
 };
 
 } // namespace
@@ -319,6 +337,26 @@ int main() {
         const ProjectManifest replacement = ProjectManifest::create("Replacement");
         replacement.writeAtomic(paths.manifestPath());
         CHECK(ProjectManifest::read(paths.manifestPath()).name() == "Replacement");
+
+        StudioApplication application;
+        CHECK(!application.frame().projectOpen);
+        application.openProject(paths.root);
+        CHECK(application.frame().projectOpen);
+        CHECK(application.frame().projectName == "Replacement");
+        application.openProject(temporary.path / "missing-project");
+        CHECK(application.frame().projectOpen);
+        CHECK(application.frame().projectName == "Replacement");
+        FakeUiPort fakeUi;
+        fakeUi.beginFrame();
+        CHECK(fakeUi.draw(application.frame()) == StudioUiCommand::none);
+        fakeUi.endFrame();
+        CHECK(fakeUi.beginCount == 1);
+        CHECK(fakeUi.endCount == 1);
+        CHECK(fakeUi.lastFrame.projectName == "Replacement");
+        application.handle(StudioUiCommand::closeProject);
+        CHECK(!application.frame().projectOpen);
+        application.handle(StudioUiCommand::quit);
+        CHECK(!application.running());
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
