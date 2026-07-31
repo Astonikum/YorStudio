@@ -164,7 +164,7 @@ int main() {
         std::vector<DiscoveryIssue> issues;
         const auto discovered = workspaceRoots.discover(issues);
         CHECK(discovered.size() == 1);
-        CHECK(discovered.front().root == gamePaths.root);
+        CHECK(std::filesystem::equivalent(discovered.front().root, gamePaths.root));
         CHECK(!issues.empty());
         const WorkspaceRoots roundTripRoots = WorkspaceRoots::fromJson(workspaceRoots.toJson());
         CHECK(roundTripRoots.roots().size() == 1);
