@@ -74,6 +74,38 @@ Manifest writes retain unknown top-level and nested extension fields during
 migrations and replace the destination only after the temporary file is fully
 written.
 
+## Scene v1
+
+Scene files use the `.yorscene` extension and are versioned JSON owned by the
+project. The minimum shape is:
+
+```json
+{
+  "schema_version": 1,
+  "objects": [
+    {
+      "guid": "a UUID",
+      "name": "Player",
+      "active": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "parent_guid": null
+    }
+  ]
+}
+```
+
+`guid` values identify objects independently of runtime `EntityId` values.
+Parent references must resolve within the same file and may not form cycles.
+The native document loader rejects malformed version-1 data before it replaces
+the open scene. Scene saves use a sibling temporary file followed by an atomic
+replacement. Unknown top-level and per-object fields are retained verbatim for
+forward-compatible editor extensions; `.yor/editor/` state is not serialized
+into the scene.
+
 ## Hidden state and safety
 
 - Project discovery is limited to explicit workspace roots and recent projects.

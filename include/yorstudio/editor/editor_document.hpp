@@ -2,13 +2,23 @@
 
 #include <yorengine/scene.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace yorstudio {
+
+class EditorDocumentError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 class SelectionModel {
 public:
@@ -29,6 +39,7 @@ private:
 
 struct EditorEntityState {
     yorengine::EntityId id{};
+    std::string guid;
     std::string name;
     yorengine::Transform transform{};
     bool active = true;
@@ -51,6 +62,9 @@ public:
     bool createObject(std::string name);
     bool renameSelected(std::string name);
     bool setSelectedTransform(yorengine::Transform transform);
+    void load(const std::filesystem::path& path);
+    void save();
+    const std::filesystem::path& scenePath() const noexcept { return scenePath_; }
 
     bool undo();
     bool redo();
@@ -74,6 +88,10 @@ private:
     std::vector<Command> history_;
     std::size_t cursor_ = 0;
     std::size_t savedCursor_ = 0;
+    std::filesystem::path scenePath_;
+    nlohmann::json sceneExtensions_ = nlohmann::json::object();
+    std::unordered_map<std::uint64_t, std::string> entityGuids_;
+    std::unordered_map<std::string, nlohmann::json> objectExtensions_;
 };
 
 } // namespace yorstudio

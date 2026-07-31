@@ -372,6 +372,33 @@ int main() {
         CHECK(application.frame().sceneEntities.front().transform.scale[1] == 2.0f);
         application.handle({StudioUiCommand::undo});
         CHECK(application.frame().sceneEntities.front().transform.position[0] == 0.0f);
+        application.handle({StudioUiCommand::saveScene});
+        CHECK(!application.frame().sceneDirty);
+        nlohmann::json savedScene;
+        {
+            std::ifstream sceneFile(paths.root / "scenes" / "main.yorscene", std::ios::binary);
+            sceneFile >> savedScene;
+        }
+        CHECK(savedScene["schema_version"] == 1);
+        CHECK(savedScene["objects"].size() == 1);
+        CHECK(savedScene["objects"][0]["name"] == "Player");
+        savedScene["x_editor_extension"] = { {"preserve", true} };
+        savedScene["objects"][0]["x_object_extension"] = "preserve";
+        {
+            std::ofstream sceneFile(paths.root / "scenes" / "main.yorscene", std::ios::binary | std::ios::trunc);
+            sceneFile << savedScene.dump(2) << '\n';
+        }
+        application.handle({StudioUiCommand::closeProject});
+        application.openProject(paths.root);
+        CHECK(application.frame().sceneEntities.size() == 1);
+        CHECK(application.frame().sceneEntities.front().name == "Player");
+        application.handle({StudioUiCommand::saveScene});
+        {
+            std::ifstream sceneFile(paths.root / "scenes" / "main.yorscene", std::ios::binary);
+            sceneFile >> savedScene;
+        }
+        CHECK(savedScene["x_editor_extension"]["preserve"] == true);
+        CHECK(savedScene["objects"][0]["x_object_extension"] == "preserve");
 
         EditorDocument document;
         CHECK(document.createObject("Stable Object"));
@@ -383,6 +410,33 @@ int main() {
         CHECK(recreatedEntity != originalEntity);
         CHECK(document.selection().active() == recreatedEntity);
         CHECK(!document.select(originalEntity));
+
+        const auto parentScenePath = temporary.path / "parent.yorscene";
+        nlohmann::json parentScene = { {"schema_version", 1}, {"objects", nlohmann::json::array()} };
+        parentScene["objects"].push_back({
+            {"guid", "11111111-1111-4111-8111-111111111111"},
+            {"name", "Parent"},
+        });
+        parentScene["objects"].push_back({
+            {"guid", "22222222-2222-4222-8222-222222222222"},
+            {"name", "Child"},
+            {"parent_guid", "11111111-1111-4111-8111-111111111111"},
+        });
+        {
+            std::ofstream sceneFile(parentScenePath, std::ios::binary);
+            sceneFile << parentScene.dump(2) << '\n';
+        }
+        EditorDocument parentDocument;
+        parentDocument.load(parentScenePath);
+        const auto parentEntities = parentDocument.entities();
+        CHECK(parentEntities.size() == 2);
+        CHECK(parentDocument.scene().parent(parentEntities[1].id) == parentEntities[0].id);
+        parentDocument.save();
+        {
+            std::ifstream sceneFile(parentScenePath, std::ios::binary);
+            sceneFile >> parentScene;
+        }
+        CHECK(parentScene["objects"][1]["parent_guid"] == "11111111-1111-4111-8111-111111111111");
         FakeUiPort fakeUi;
         fakeUi.beginFrame();
         CHECK(fakeUi.draw(application.frame()).command == StudioUiCommand::none);

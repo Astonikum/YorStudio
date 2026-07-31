@@ -46,6 +46,7 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open Project...")) action.command = StudioUiCommand::chooseProject;
             if (ImGui::MenuItem("New Project...")) ImGui::OpenPopup("New Project");
+            if (frame.editorOpen && ImGui::MenuItem("Save Scene")) action.command = StudioUiCommand::saveScene;
             if (frame.projectOpen && ImGui::MenuItem("Close Project")) action.command = StudioUiCommand::closeProject;
             ImGui::Separator();
             if (ImGui::MenuItem("Quit")) action.command = StudioUiCommand::quit;
@@ -88,6 +89,8 @@ StudioUiAction ImGuiUiPort::draw(const StudioUiFrame& frame) {
     if (frame.editorOpen) {
         ImGui::Begin("Scene");
         if (ImGui::Button("Create Object...")) ImGui::OpenPopup("Create Object");
+        ImGui::SameLine();
+        if (ImGui::Button("Save Scene")) action.command = StudioUiCommand::saveScene;
         ImGui::SameLine();
         if (ImGui::Button("Undo")) action.command = StudioUiCommand::undo;
         ImGui::SameLine();

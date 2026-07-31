@@ -48,6 +48,7 @@ enum class StudioUiCommand {
     setTransform,
     undo,
     redo,
+    saveScene,
     closeProject,
     quit,
 };
