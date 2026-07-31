@@ -17,6 +17,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+set(YORENGINE_BUILD_JNI OFF CACHE BOOL "Disable YorEngine JNI for YorStudio" FORCE)
+set(YORENGINE_BUILD_TESTS OFF CACHE BOOL "Disable YorEngine tests inside YorStudio" FORCE)
+FetchContent_Declare(
+    yorengine
+    GIT_REPOSITORY https://github.com/Astonikum/YorEngine.git
+    GIT_TAG 9a4921176da619c147168f40e01d4a86f49e666b
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(yorengine)
+
 add_library(yorstudio_project STATIC
     src/project/project_manifest.cpp
     src/project/project_lock.cpp
@@ -35,10 +45,11 @@ target_link_libraries(yorstudio_project_validate PRIVATE yorstudio_project)
 
 add_library(yorstudio_app STATIC
     src/app/studio_application.cpp
+    src/editor/editor_document.cpp
 )
 target_compile_features(yorstudio_app PUBLIC cxx_std_20)
 target_include_directories(yorstudio_app PUBLIC include)
-target_link_libraries(yorstudio_app PUBLIC yorstudio_project)
+target_link_libraries(yorstudio_app PUBLIC yorstudio_project yorengine)
 
 if(YORSTUDIO_BUILD_DESKTOP AND WIN32)
     FetchContent_Declare(

@@ -59,10 +59,14 @@ and a corrupt cache never destroys `code/`, `assets/`, or `scenes/`.
 
 ## Phase 2 - Editor shell and command model
 
+- [x] Add the first `StudioApplication` editor lifecycle over pinned YorEngine
+  APIs: an in-memory scene document, stable EntityId selection, object creation,
+  rename/transform commands, and undo/redo.
 - [ ] Add `StudioApplication` lifecycle, platform window, input, clipboard,
   file dialogs, logging, crash-safe shutdown, and safe mode.
-- [ ] Add dockable ImGui shell: menu bar, toolbar, status bar, project settings,
-  console, diagnostics, and layout persistence.
+- [x] Add the first dockable ImGui editor shell: scene hierarchy, inspector,
+  object creation, transform/name editing, undo, and redo.
+- [ ] Add project settings, console, diagnostics, and layout persistence.
 - [ ] Implement editor commands with execute/undo/redo, merge/coalescing for
   continuous edits, transaction boundaries, stable entity references, and
   failure rollback.
