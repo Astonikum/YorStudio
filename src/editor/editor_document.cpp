@@ -242,6 +242,68 @@ void applyKnownComponents(yorengine::Scene& scene, yorengine::EntityId entity,
     }
 }
 
+template <typename CameraLike>
+void applyCameraState(CameraLike& camera, const EditorCameraState& state) {
+    camera.setFovYDegrees(state.fovYDegrees);
+    camera.setAspectRatio(state.aspectRatio);
+    if (state.nearPlane < camera.nearPlane()) {
+        camera.setNearPlane(state.nearPlane);
+        camera.setFarPlane(state.farPlane);
+    } else {
+        camera.setFarPlane(state.farPlane);
+        camera.setNearPlane(state.nearPlane);
+    }
+    camera.setChannelMask(state.channelMask);
+}
+
+void applyCameraKeyPointState(yorengine::CameraKeyPoint& keyPoint, const EditorCameraKeyPointState& state,
+                              std::optional<yorengine::EntityId> followTarget,
+                              std::optional<yorengine::EntityId> lookAtTarget) {
+    auto lens = state.lens;
+    lens.channelMask = state.channelMask;
+    applyCameraState(keyPoint, lens);
+    keyPoint.setPriority(state.priority);
+    keyPoint.setEnabled(state.enabled);
+    keyPoint.setChannelMask(state.channelMask);
+    keyPoint.setBlendDurationSeconds(state.blendDurationSeconds);
+    if (followTarget) keyPoint.setFollowTarget(*followTarget);
+    else keyPoint.clearFollowTarget();
+    keyPoint.setFollowOffset(state.followOffset, state.followOffsetSpace);
+    if (lookAtTarget) keyPoint.setLookAtTarget(*lookAtTarget);
+    else keyPoint.clearLookAtTarget();
+    keyPoint.setLookAtOffset(state.lookAtOffset, state.lookAtOffsetSpace);
+}
+
+void applyCameraNoiseState(yorengine::CameraNoise& noise, const EditorCameraNoiseState& state) {
+    noise.setPositionAmplitude(state.positionAmplitude);
+    noise.setRotationAmplitudeDegrees(state.rotationAmplitudeDegrees);
+    noise.setFrequency(state.frequency);
+    noise.setSeed(state.seed);
+}
+
+bool sameVec3(yorengine::Vec3 left, yorengine::Vec3 right) noexcept {
+    return left.x == right.x && left.y == right.y && left.z == right.z;
+}
+
+bool sameCameraState(const EditorCameraState& left, const EditorCameraState& right) noexcept {
+    return left.fovYDegrees == right.fovYDegrees && left.aspectRatio == right.aspectRatio &&
+        left.nearPlane == right.nearPlane && left.farPlane == right.farPlane && left.channelMask == right.channelMask;
+}
+
+bool sameCameraKeyPointState(const EditorCameraKeyPointState& left, const EditorCameraKeyPointState& right) noexcept {
+    return left.priority == right.priority && left.enabled == right.enabled && left.channelMask == right.channelMask &&
+        left.blendDurationSeconds == right.blendDurationSeconds && sameCameraState(left.lens, right.lens) &&
+        left.followTargetGuid == right.followTargetGuid && sameVec3(left.followOffset, right.followOffset) &&
+        left.followOffsetSpace == right.followOffsetSpace && left.lookAtTargetGuid == right.lookAtTargetGuid &&
+        sameVec3(left.lookAtOffset, right.lookAtOffset) && left.lookAtOffsetSpace == right.lookAtOffsetSpace;
+}
+
+bool sameCameraNoiseState(const EditorCameraNoiseState& left, const EditorCameraNoiseState& right) noexcept {
+    return sameVec3(left.positionAmplitude, right.positionAmplitude) &&
+        sameVec3(left.rotationAmplitudeDegrees, right.rotationAmplitudeDegrees) &&
+        left.frequency == right.frequency && left.seed == right.seed;
+}
+
 std::string offsetSpaceJson(yorengine::CameraOffsetSpace space) {
     return space == yorengine::CameraOffsetSpace::World ? "world" : "target_local";
 }
@@ -783,6 +845,278 @@ bool EditorDocument::setSelectedTransform(yorengine::Transform transform) {
     });
 }
 
+bool EditorDocument::addSelectedCamera() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::Camera>(*selected)) return false;
+    return commit({
+        "Add Camera",
+        [selected](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::Camera>();
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Camera>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedCamera() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::Camera>(*selected);
+    if (!current) return false;
+    const EditorCameraState before{
+        current->fovYDegrees(), current->aspectRatio(), current->nearPlane(), current->farPlane(), current->channelMask(),
+    };
+    return commit({
+        "Remove Camera",
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::Camera>(*selected); },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                auto& camera = scene.object(*selected).add<yorengine::Camera>();
+                applyCameraState(camera, before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedCamera(EditorCameraState state) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::Camera>(*selected);
+    if (!current) return false;
+    const EditorCameraState before{
+        current->fovYDegrees(), current->aspectRatio(), current->nearPlane(), current->farPlane(), current->channelMask(),
+    };
+    if (sameCameraState(before, state)) return true;
+    try {
+        yorengine::Camera validation;
+        applyCameraState(validation, state);
+    } catch (...) {
+        return false;
+    }
+    return commit({
+        "Set Camera",
+        [selected, state](yorengine::Scene& scene) {
+            try {
+                applyCameraState(*scene.component<yorengine::Camera>(*selected), state);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                applyCameraState(*scene.component<yorengine::Camera>(*selected), before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::addSelectedCameraKeyPoint() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::CameraKeyPoint>(*selected)) return false;
+    return commit({
+        "Add Camera Key Point",
+        [selected](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::CameraKeyPoint>();
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::CameraKeyPoint>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedCameraKeyPoint() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::CameraKeyPoint>(*selected);
+    if (!current) return false;
+    const auto guidFor = [this](yorengine::EntityId entity) -> std::optional<std::string> {
+        if (!valid(scene_, entity)) return std::nullopt;
+        const auto found = entityGuids_.find(entityKey(entity));
+        return found == entityGuids_.end() ? std::nullopt : std::optional{found->second};
+    };
+    const EditorCameraKeyPointState before{
+        current->priority(), current->enabled(), current->channelMask(), current->blendDurationSeconds(),
+        {current->fovYDegrees(), current->aspectRatio(), current->nearPlane(), current->farPlane(), 1},
+        guidFor(current->followTarget()), current->followOffset(), current->followOffsetSpace(),
+        guidFor(current->lookAtTarget()), current->lookAtOffset(), current->lookAtOffsetSpace(),
+    };
+    const auto followTarget = current->followTarget().valid()
+        ? std::optional{current->followTarget()} : std::nullopt;
+    const auto lookAtTarget = current->lookAtTarget().valid()
+        ? std::optional{current->lookAtTarget()} : std::nullopt;
+    return commit({
+        "Remove Camera Key Point",
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::CameraKeyPoint>(*selected); },
+        [selected, before, followTarget, lookAtTarget](yorengine::Scene& scene) {
+            try {
+                auto& keyPoint = scene.object(*selected).add<yorengine::CameraKeyPoint>();
+                applyCameraKeyPointState(keyPoint, before, followTarget, lookAtTarget);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedCameraKeyPoint(EditorCameraKeyPointState state) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::CameraKeyPoint>(*selected);
+    if (!current) return false;
+    const auto states = entities();
+    const auto stateIt = std::find_if(states.begin(), states.end(), [selected](const auto& value) {
+        return value.id == *selected;
+    });
+    if (stateIt == states.end() || !stateIt->cameraKeyPoint) return false;
+    const auto before = *stateIt->cameraKeyPoint;
+    if (sameCameraKeyPointState(before, state)) return true;
+    const auto resolveTarget = [this](const std::optional<std::string>& guid) -> std::optional<yorengine::EntityId> {
+        if (!guid) return std::nullopt;
+        return entityForGuid(*guid);
+    };
+    const auto followTarget = resolveTarget(state.followTargetGuid);
+    const auto lookAtTarget = resolveTarget(state.lookAtTargetGuid);
+    if ((state.followTargetGuid && !followTarget) || (state.lookAtTargetGuid && !lookAtTarget)) return false;
+    try {
+        yorengine::CameraKeyPoint validation;
+        applyCameraKeyPointState(validation, state, followTarget, lookAtTarget);
+    } catch (...) {
+        return false;
+    }
+    const auto beforeFollowTarget = resolveTarget(before.followTargetGuid);
+    const auto beforeLookAtTarget = resolveTarget(before.lookAtTargetGuid);
+    return commit({
+        "Set Camera Key Point",
+        [selected, state, followTarget, lookAtTarget](yorengine::Scene& scene) {
+            try {
+                applyCameraKeyPointState(*scene.component<yorengine::CameraKeyPoint>(*selected), state,
+                                         followTarget, lookAtTarget);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected, before, beforeFollowTarget, beforeLookAtTarget](yorengine::Scene& scene) {
+            try {
+                applyCameraKeyPointState(*scene.component<yorengine::CameraKeyPoint>(*selected), before,
+                                         beforeFollowTarget, beforeLookAtTarget);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::addSelectedCameraNoise() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected) || scene_.component<yorengine::CameraNoise>(*selected)) return false;
+    return commit({
+        "Add Camera Noise",
+        [selected](yorengine::Scene& scene) {
+            try {
+                scene.object(*selected).add<yorengine::CameraNoise>();
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::CameraNoise>(*selected); },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::removeSelectedCameraNoise() {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::CameraNoise>(*selected);
+    if (!current) return false;
+    const EditorCameraNoiseState before{
+        current->positionAmplitude(), current->rotationAmplitudeDegrees(), current->frequency(), current->seed(),
+    };
+    return commit({
+        "Remove Camera Noise",
+        [selected](yorengine::Scene& scene) { return scene.removeComponent<yorengine::CameraNoise>(*selected); },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                auto& noise = scene.object(*selected).add<yorengine::CameraNoise>();
+                applyCameraNoiseState(noise, before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
+bool EditorDocument::setSelectedCameraNoise(EditorCameraNoiseState state) {
+    const auto selected = selection_.active();
+    if (!selected || !valid(scene_, *selected)) return false;
+    const auto* current = scene_.component<yorengine::CameraNoise>(*selected);
+    if (!current) return false;
+    const EditorCameraNoiseState before{
+        current->positionAmplitude(), current->rotationAmplitudeDegrees(), current->frequency(), current->seed(),
+    };
+    if (sameCameraNoiseState(before, state)) return true;
+    try {
+        yorengine::CameraNoise validation;
+        applyCameraNoiseState(validation, state);
+    } catch (...) {
+        return false;
+    }
+    return commit({
+        "Set Camera Noise",
+        [selected, state](yorengine::Scene& scene) {
+            try {
+                applyCameraNoiseState(*scene.component<yorengine::CameraNoise>(*selected), state);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        [selected, before](yorengine::Scene& scene) {
+            try {
+                applyCameraNoiseState(*scene.component<yorengine::CameraNoise>(*selected), before);
+                return true;
+            } catch (...) {
+                return false;
+            }
+        },
+        {},
+        {},
+    });
+}
+
 void EditorDocument::load(const std::filesystem::path& path) {
     if (path.empty()) throw EditorDocumentError("scene: path must not be empty");
     std::ifstream stream(path, std::ios::binary);
@@ -990,6 +1324,9 @@ void EditorDocument::save() {
         nlohmann::json components = object.value("components", nlohmann::json::object());
         if (!components.is_object()) throw EditorDocumentError("scene: components must be an object");
         mergeKnownJson(components, knownComponents(scene_, state.id, guidFor));
+        if (!state.camera) components.erase("camera");
+        if (!state.cameraKeyPoint) components.erase("camera_key_point");
+        if (!state.cameraNoise) components.erase("camera_noise");
         if (components.empty()) object.erase("components");
         else object["components"] = std::move(components);
         const auto parentEntity = scene_.parent(state.id);

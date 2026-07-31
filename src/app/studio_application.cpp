@@ -38,6 +38,82 @@ StudioUiTransform transform(const yorengine::Transform& value) {
     return result;
 }
 
+yorengine::CameraOffsetSpace offsetSpace(StudioUiCameraOffsetSpace value) {
+    return value == StudioUiCameraOffsetSpace::world
+        ? yorengine::CameraOffsetSpace::World : yorengine::CameraOffsetSpace::TargetLocal;
+}
+
+StudioUiCameraOffsetSpace offsetSpace(yorengine::CameraOffsetSpace value) {
+    return value == yorengine::CameraOffsetSpace::World
+        ? StudioUiCameraOffsetSpace::world : StudioUiCameraOffsetSpace::targetLocal;
+}
+
+EditorCameraState camera(const StudioUiCamera& value) {
+    return {value.fovYDegrees, value.aspectRatio, value.nearPlane, value.farPlane, value.channelMask};
+}
+
+StudioUiCamera camera(const EditorCameraState& value) {
+    return {value.fovYDegrees, value.aspectRatio, value.nearPlane, value.farPlane, value.channelMask};
+}
+
+EditorCameraKeyPointState cameraKeyPoint(const StudioUiCameraKeyPoint& value) {
+    EditorCameraKeyPointState result;
+    result.priority = value.priority;
+    result.enabled = value.enabled;
+    result.channelMask = value.channelMask;
+    result.blendDurationSeconds = value.blendDurationSeconds;
+    result.lens = camera(value.lens);
+    result.followTargetGuid = value.followTargetGuid;
+    result.followOffset = {value.followOffset[0], value.followOffset[1], value.followOffset[2]};
+    result.followOffsetSpace = offsetSpace(value.followOffsetSpace);
+    result.lookAtTargetGuid = value.lookAtTargetGuid;
+    result.lookAtOffset = {value.lookAtOffset[0], value.lookAtOffset[1], value.lookAtOffset[2]};
+    result.lookAtOffsetSpace = offsetSpace(value.lookAtOffsetSpace);
+    return result;
+}
+
+StudioUiCameraKeyPoint cameraKeyPoint(const EditorCameraKeyPointState& value) {
+    StudioUiCameraKeyPoint result;
+    result.priority = value.priority;
+    result.enabled = value.enabled;
+    result.channelMask = value.channelMask;
+    result.blendDurationSeconds = value.blendDurationSeconds;
+    result.lens = camera(value.lens);
+    result.followTargetGuid = value.followTargetGuid;
+    result.followOffset[0] = value.followOffset.x;
+    result.followOffset[1] = value.followOffset.y;
+    result.followOffset[2] = value.followOffset.z;
+    result.followOffsetSpace = offsetSpace(value.followOffsetSpace);
+    result.lookAtTargetGuid = value.lookAtTargetGuid;
+    result.lookAtOffset[0] = value.lookAtOffset.x;
+    result.lookAtOffset[1] = value.lookAtOffset.y;
+    result.lookAtOffset[2] = value.lookAtOffset.z;
+    result.lookAtOffsetSpace = offsetSpace(value.lookAtOffsetSpace);
+    return result;
+}
+
+EditorCameraNoiseState cameraNoise(const StudioUiCameraNoise& value) {
+    return {
+        {value.positionAmplitude[0], value.positionAmplitude[1], value.positionAmplitude[2]},
+        {value.rotationAmplitudeDegrees[0], value.rotationAmplitudeDegrees[1], value.rotationAmplitudeDegrees[2]},
+        value.frequency,
+        value.seed,
+    };
+}
+
+StudioUiCameraNoise cameraNoise(const EditorCameraNoiseState& value) {
+    StudioUiCameraNoise result;
+    result.positionAmplitude[0] = value.positionAmplitude.x;
+    result.positionAmplitude[1] = value.positionAmplitude.y;
+    result.positionAmplitude[2] = value.positionAmplitude.z;
+    result.rotationAmplitudeDegrees[0] = value.rotationAmplitudeDegrees.x;
+    result.rotationAmplitudeDegrees[1] = value.rotationAmplitudeDegrees.y;
+    result.rotationAmplitudeDegrees[2] = value.rotationAmplitudeDegrees.z;
+    result.frequency = value.frequency;
+    result.seed = value.seed;
+    return result;
+}
+
 } // namespace
 
 StudioApplication::StudioApplication(std::filesystem::path recentProjectsPath)
@@ -130,6 +206,39 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
             status_ = "Cannot change selected object transform.";
         }
         break;
+    case StudioUiCommand::addCamera:
+        if (!editor_ || !editor_->addSelectedCamera()) status_ = "Cannot add camera.";
+        break;
+    case StudioUiCommand::removeCamera:
+        if (!editor_ || !editor_->removeSelectedCamera()) status_ = "Cannot remove camera.";
+        break;
+    case StudioUiCommand::setCamera:
+        if (!editor_ || !action.camera || !editor_->setSelectedCamera(camera(*action.camera))) {
+            status_ = "Cannot change camera.";
+        }
+        break;
+    case StudioUiCommand::addCameraKeyPoint:
+        if (!editor_ || !editor_->addSelectedCameraKeyPoint()) status_ = "Cannot add camera key point.";
+        break;
+    case StudioUiCommand::removeCameraKeyPoint:
+        if (!editor_ || !editor_->removeSelectedCameraKeyPoint()) status_ = "Cannot remove camera key point.";
+        break;
+    case StudioUiCommand::setCameraKeyPoint:
+        if (!editor_ || !action.cameraKeyPoint || !editor_->setSelectedCameraKeyPoint(cameraKeyPoint(*action.cameraKeyPoint))) {
+            status_ = "Cannot change camera key point.";
+        }
+        break;
+    case StudioUiCommand::addCameraNoise:
+        if (!editor_ || !editor_->addSelectedCameraNoise()) status_ = "Cannot add camera noise.";
+        break;
+    case StudioUiCommand::removeCameraNoise:
+        if (!editor_ || !editor_->removeSelectedCameraNoise()) status_ = "Cannot remove camera noise.";
+        break;
+    case StudioUiCommand::setCameraNoise:
+        if (!editor_ || !action.cameraNoise || !editor_->setSelectedCameraNoise(cameraNoise(*action.cameraNoise))) {
+            status_ = "Cannot change camera noise.";
+        }
+        break;
     case StudioUiCommand::undo:
         if (!editor_ || !editor_->undo()) status_ = "Nothing to undo.";
         break;
@@ -181,12 +290,16 @@ StudioUiFrame StudioApplication::frame() const {
                 item.parentIndex = parent.index;
                 item.parentGeneration = parent.generation;
             }
+            item.guid = entity.guid;
             item.tags = entity.tags;
             item.layer = entity.layer;
             item.name = entity.name;
             item.transform = transform(entity.transform);
             item.active = entity.active;
             item.selected = entity.selected;
+            if (entity.camera) item.camera = camera(*entity.camera);
+            if (entity.cameraKeyPoint) item.cameraKeyPoint = cameraKeyPoint(*entity.cameraKeyPoint);
+            if (entity.cameraNoise) item.cameraNoise = cameraNoise(*entity.cameraNoise);
             result.sceneEntities.push_back(std::move(item));
         }
     }

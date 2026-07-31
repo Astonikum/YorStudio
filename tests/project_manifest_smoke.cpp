@@ -372,6 +372,24 @@ int main() {
         CHECK(application.frame().sceneEntities.front().transform.scale[1] == 2.0f);
         application.handle({StudioUiCommand::undo});
         CHECK(application.frame().sceneEntities.front().transform.position[0] == 0.0f);
+        const auto appEntity = application.frame().sceneEntities.front();
+        StudioUiAction selectAppEntity;
+        selectAppEntity.command = StudioUiCommand::selectObject;
+        selectAppEntity.entityIndex = appEntity.index;
+        selectAppEntity.entityGeneration = appEntity.generation;
+        application.handle(selectAppEntity);
+        application.handle({StudioUiCommand::addCamera});
+        CHECK(application.frame().sceneEntities.front().camera.has_value());
+        StudioUiAction setAppCamera;
+        setAppCamera.command = StudioUiCommand::setCamera;
+        setAppCamera.camera = StudioUiCamera{};
+        setAppCamera.camera->fovYDegrees = 55.0f;
+        application.handle(setAppCamera);
+        CHECK(application.frame().sceneEntities.front().camera->fovYDegrees == 55.0f);
+        application.handle({StudioUiCommand::undo});
+        CHECK(application.frame().sceneEntities.front().camera->fovYDegrees == 70.0f);
+        application.handle({StudioUiCommand::redo});
+        CHECK(application.frame().sceneEntities.front().camera->fovYDegrees == 55.0f);
         application.handle({StudioUiCommand::saveScene});
         CHECK(!application.frame().sceneDirty);
         nlohmann::json savedScene;
@@ -522,6 +540,58 @@ int main() {
         }
         CHECK(cameraScene["objects"][1]["components"]["camera_key_point"]["x_unknown"] == true);
         CHECK(cameraScene["objects"][1]["components"]["custom_component"]["preserve"] == true);
+
+        CHECK(cameraDocument.select(*shotEntity));
+        std::optional<EditorCameraKeyPointState> editedKeyPoint;
+        std::optional<EditorCameraNoiseState> editedNoise;
+        for (const auto& state : cameraDocument.entities()) {
+            if (state.id != *shotEntity) continue;
+            editedKeyPoint = state.cameraKeyPoint;
+            editedNoise = state.cameraNoise;
+        }
+        CHECK(editedKeyPoint && editedNoise);
+        editedKeyPoint->priority = 20;
+        editedKeyPoint->blendDurationSeconds = 0.75f;
+        CHECK(cameraDocument.setSelectedCameraKeyPoint(*editedKeyPoint));
+        CHECK(cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity)->priority() == 20);
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity)->priority() == 10);
+        CHECK(cameraDocument.redo());
+        CHECK(cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity)->priority() == 20);
+        const auto validKeyPointState = *editedKeyPoint;
+        editedKeyPoint->lens.fovYDegrees = 180.0f;
+        CHECK(!cameraDocument.setSelectedCameraKeyPoint(*editedKeyPoint));
+        CHECK(cameraDocument.scene().component<yorengine::CameraKeyPoint>(*shotEntity)->priority() == 20);
+        editedKeyPoint = validKeyPointState;
+        editedNoise->frequency = 4.0f;
+        CHECK(cameraDocument.setSelectedCameraNoise(*editedNoise));
+        CHECK(cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity)->frequency() == 4.0f);
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity)->frequency() == 2.0f);
+        CHECK(cameraDocument.redo());
+        CHECK(cameraDocument.scene().component<yorengine::CameraNoise>(*shotEntity)->frequency() == 4.0f);
+
+        CHECK(cameraDocument.select(*targetEntity));
+        CHECK(cameraDocument.addSelectedCamera());
+        CHECK(cameraDocument.scene().component<yorengine::Camera>(*targetEntity));
+        EditorCameraState invalidCamera;
+        invalidCamera.channelMask = 0;
+        CHECK(!cameraDocument.setSelectedCamera(invalidCamera));
+        CHECK(cameraDocument.scene().component<yorengine::Camera>(*targetEntity)->channelMask() == 1);
+        CHECK(cameraDocument.removeSelectedCamera());
+        CHECK(!cameraDocument.scene().component<yorengine::Camera>(*targetEntity));
+        CHECK(cameraDocument.undo());
+        CHECK(cameraDocument.scene().component<yorengine::Camera>(*targetEntity));
+        cameraDocument.redo();
+        CHECK(!cameraDocument.scene().component<yorengine::Camera>(*targetEntity));
+        cameraDocument.save();
+        {
+            std::ifstream sceneFile(cameraScenePath, std::ios::binary);
+            sceneFile >> cameraScene;
+        }
+        for (const auto& object : cameraScene["objects"]) {
+            if (object["guid"] == targetGuid) CHECK(!object.contains("components"));
+        }
 
         auto invalidCameraScene = cameraScene;
         invalidCameraScene["objects"][1]["components"]["camera_key_point"]["follow_target_guid"] =

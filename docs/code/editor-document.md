@@ -42,6 +42,12 @@ components on a temporary YorEngine scene before replacing the live document;
 duplicate/undo restoration resolves internal and external GUID targets, while
 unknown component fields remain preserved on save.
 
+The camera inspector exposes this state through plain `StudioUiFrame` and
+`StudioUiAction` values. Add/remove/set operations are routed through
+`EditorDocument` commands, so validation and undo/redo stay independent from
+Dear ImGui; target pickers write stable object GUIDs rather than transient
+entity indices.
+
 The ImGui adapter consumes `StudioUiFrame`/`StudioUiAction` values and never
 passes ImGui types into the editor model. A fake UI port exercises the same
 application path in the native smoke test.

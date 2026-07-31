@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,17 +17,55 @@ struct StudioUiTransform {
     float scale[3] = {1.0f, 1.0f, 1.0f};
 };
 
+struct StudioUiCamera {
+    float fovYDegrees = 70.0f;
+    float aspectRatio = 16.0f / 9.0f;
+    float nearPlane = 0.05f;
+    float farPlane = 512.0f;
+    unsigned int channelMask = 1;
+};
+
+enum class StudioUiCameraOffsetSpace {
+    world,
+    targetLocal,
+};
+
+struct StudioUiCameraKeyPoint {
+    int priority = 0;
+    bool enabled = true;
+    unsigned int channelMask = 1;
+    float blendDurationSeconds = 0.0f;
+    StudioUiCamera lens;
+    std::optional<std::string> followTargetGuid;
+    float followOffset[3] = {};
+    StudioUiCameraOffsetSpace followOffsetSpace = StudioUiCameraOffsetSpace::targetLocal;
+    std::optional<std::string> lookAtTargetGuid;
+    float lookAtOffset[3] = {};
+    StudioUiCameraOffsetSpace lookAtOffsetSpace = StudioUiCameraOffsetSpace::targetLocal;
+};
+
+struct StudioUiCameraNoise {
+    float positionAmplitude[3] = {};
+    float rotationAmplitudeDegrees[3] = {};
+    float frequency = 1.0f;
+    unsigned int seed = 0;
+};
+
 struct StudioUiEntity {
     unsigned int index = 0;
     unsigned int generation = 0;
     unsigned int parentIndex = 0;
     unsigned int parentGeneration = 0;
+    std::string guid;
     std::vector<std::string> tags;
     unsigned int layer = 0;
     std::string name;
     StudioUiTransform transform;
     bool active = true;
     bool selected = false;
+    std::optional<StudioUiCamera> camera;
+    std::optional<StudioUiCameraKeyPoint> cameraKeyPoint;
+    std::optional<StudioUiCameraNoise> cameraNoise;
 };
 
 struct StudioUiFrame {
@@ -58,6 +97,15 @@ enum class StudioUiCommand {
     setLayer,
     renameObject,
     setTransform,
+    addCamera,
+    removeCamera,
+    setCamera,
+    addCameraKeyPoint,
+    removeCameraKeyPoint,
+    setCameraKeyPoint,
+    addCameraNoise,
+    removeCameraNoise,
+    setCameraNoise,
     undo,
     redo,
     saveScene,
@@ -78,6 +126,9 @@ struct StudioUiAction {
     std::string tag;
     bool active = true;
     StudioUiTransform transform;
+    std::optional<StudioUiCamera> camera;
+    std::optional<StudioUiCameraKeyPoint> cameraKeyPoint;
+    std::optional<StudioUiCameraNoise> cameraNoise;
 };
 
 class StudioUiPort {

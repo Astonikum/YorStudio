@@ -88,6 +88,8 @@ project, and document tests unchanged.
 - [x] Add native tags and layers with scene persistence and inspector actions.
 - [x] Persist native Camera/CameraKeyPoint/CameraNoise state, GUID targets,
   offset spaces, and deterministic noise through the scene document.
+- [x] Add editable Camera/CameraKeyPoint/CameraNoise inspector actions with
+  native validation and undo/redo.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
 - [ ] Add viewport using RenderSnapshot, editor grid/axes, camera navigation,
