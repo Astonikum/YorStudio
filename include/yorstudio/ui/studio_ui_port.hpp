@@ -90,6 +90,8 @@ struct StudioUiViewportEntity {
     unsigned int generation = 0;
     std::size_t firstVertex = 0;
     std::size_t vertexCount = 0;
+    StudioUiTransform transform;
+    bool selected = false;
 };
 
 struct StudioUiViewportSelection {

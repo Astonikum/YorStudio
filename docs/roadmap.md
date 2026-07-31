@@ -98,8 +98,11 @@ project, and document tests unchanged.
   actions so the viewport can contain authored geometry.
 - [ ] Add inspector schemas for Transform, Mesh, Camera, Light, and custom
   components; validate edits before committing commands.
-- [ ] Extend the viewport with editor grid/axes, camera navigation,
-  selection outline, transform gizmos, snapping, local/world modes, and resize.
+- [x] Extend the viewport with editor grid/axes, camera navigation, ray
+  selection, selection outline, translation gizmo, snapping, local/world
+  modes, and resize.
+- [ ] Add rotation/scale gizmos, multi-selection handles, and per-tool
+  hotkeys over the same viewport interaction contract.
 - [x] Add version-1 scene save/load with GUID references, atomic writes, and
   preservation of unknown extension data.
 - [ ] Add scene migrations for future schema versions.

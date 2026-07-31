@@ -24,6 +24,11 @@ public:
     void setBounds(int x, int y, int width, int height);
     void render();
     std::optional<StudioUiViewportSelection> takeSelection();
+    std::optional<StudioUiTransform> takeTransformEdit();
+    bool gizmoUsesLocalSpace() const noexcept { return gizmoLocalSpace_; }
+    bool gizmoSnappingEnabled() const noexcept { return gizmoSnapping_; }
+    void toggleGizmoSpace() noexcept { gizmoLocalSpace_ = !gizmoLocalSpace_; }
+    void toggleGizmoSnapping() noexcept { gizmoSnapping_ = !gizmoSnapping_; }
     static LRESULT CALLBACK windowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
 private:
@@ -31,6 +36,8 @@ private:
     void initializeCamera(const StudioUiViewportCamera& source);
     void updateCamera();
     void pick(int x, int y);
+    int gizmoHitAxis(int x, int y) const;
+    void updateGizmoDrag(int x, int y);
     void updateCapture();
 
     Win32Window& parent_;
@@ -53,7 +60,16 @@ private:
     bool rightDown_ = false;
     bool dragged_ = false;
     bool cameraInitialized_ = false;
+    bool gizmoLocalSpace_ = false;
+    bool gizmoSnapping_ = true;
+    bool gizmoDragging_ = false;
+    int gizmoAxis_ = -1;
+    int gizmoStartMouseX_ = 0;
+    int gizmoStartMouseY_ = 0;
+    float gizmoDelta_ = 0.0f;
+    StudioUiTransform gizmoStartTransform_;
     std::optional<StudioUiViewportSelection> pendingSelection_;
+    std::optional<StudioUiTransform> pendingTransformEdit_;
     bool ready_ = false;
 };
 
