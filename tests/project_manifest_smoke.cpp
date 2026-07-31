@@ -174,7 +174,7 @@ int main() {
         recent.record(customPaths.root, custom);
         recent.record(gamePaths.root, created);
         CHECK(recent.entries().size() == 2);
-        CHECK(recent.entries().front().root == gamePaths.root);
+        CHECK(std::filesystem::equivalent(recent.entries().front().root, gamePaths.root));
         const auto recentPath = temporary.path / "recent.yorprojects";
         recent.writeAtomic(recentPath);
         const RecentProjects loadedRecent = RecentProjects::read(recentPath);
