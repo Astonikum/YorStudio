@@ -1,5 +1,7 @@
 #pragma once
 
+#include "yorstudio/project_creation.hpp"
+
 #include <string>
 #include <vector>
 
@@ -8,6 +10,9 @@ namespace yorstudio {
 struct StudioUiRecentProject {
     std::string name;
     std::string root;
+    bool pinned = false;
+    std::string createdAt;
+    std::string modifiedAt;
 };
 
 struct StudioUiTransform {
@@ -44,7 +49,13 @@ struct StudioUiFrame {
 enum class StudioUiCommand {
     none,
     chooseProject,
+    chooseProjectParent,
     openRecentProject,
+    setRecentPinned,
+    moveRecentProjectUp,
+    moveRecentProjectDown,
+    moveRecentProjectBefore,
+    removeRecentProject,
     newProject,
     createObject,
     selectObject,
@@ -78,6 +89,8 @@ struct StudioUiAction {
     std::string tag;
     bool active = true;
     StudioUiTransform transform;
+    ProjectCreationSettings projectSettings;
+    std::string targetProjectRoot;
 };
 
 class StudioUiPort {

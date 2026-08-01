@@ -93,17 +93,21 @@ struct RecentProject {
     std::string projectGuid;
     std::string name;
     std::string lastOpenedAt;
+    bool pinned = false;
 };
 
 class RecentProjects {
 public:
-    static constexpr int CurrentSchemaVersion = 1;
+    static constexpr int CurrentSchemaVersion = 2;
     static constexpr std::size_t MaximumEntries = 32;
 
     static RecentProjects read(const std::filesystem::path& path);
 
     void record(const std::filesystem::path& projectRoot, const ProjectManifest& manifest);
     void remove(const std::filesystem::path& projectRoot);
+    bool setPinned(const std::filesystem::path& projectRoot, bool pinned);
+    bool move(const std::filesystem::path& projectRoot, int direction);
+    bool moveBefore(const std::filesystem::path& projectRoot, const std::filesystem::path& targetRoot);
     void writeAtomic(const std::filesystem::path& path) const;
 
     const std::vector<RecentProject>& entries() const noexcept { return entries_; }

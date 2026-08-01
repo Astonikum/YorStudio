@@ -31,8 +31,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         const auto action = ui.draw(application.frame());
         if (action.command == yorstudio::StudioUiCommand::chooseProject) {
             application.handle(action, window.browseForProject());
+        } else if (action.command == yorstudio::StudioUiCommand::chooseProjectParent) {
+            ui.setNewProjectParent(window.browseForDirectory(L"Select the parent folder for the new YOR project"));
         } else if (action.command == yorstudio::StudioUiCommand::newProject) {
-            application.handle(action, window.browseForDirectory(L"Select a parent folder for the new YOR project"));
+            application.handle(action);
         } else {
             application.handle(action);
         }

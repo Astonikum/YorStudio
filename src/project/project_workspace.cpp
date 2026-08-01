@@ -178,10 +178,11 @@ WorkspaceRoots WorkspaceRoots::fromJson(std::string_view text) {
         throw WorkspaceError(std::string("workspace roots: invalid JSON: ") + error.what());
     }
     if (!data.is_object()) fail("workspace roots", "must be an object");
-    if (!data.contains("schema_version") || !data.at("schema_version").is_number_integer() ||
-        data.at("schema_version").get<int>() != CurrentSchemaVersion) {
-        fail("schema_version", "expected 1");
+    if (!data.contains("schema_version") || !data.at("schema_version").is_number_integer()) {
+        fail("schema_version", "expected 1 or 2");
     }
+    const int schemaVersion = data.at("schema_version").get<int>();
+    if (schemaVersion < 1 || schemaVersion > CurrentSchemaVersion) fail("schema_version", "expected 1 or 2");
     if (!data.contains("roots") || !data.at("roots").is_array()) fail("roots", "must be a list");
 
     WorkspaceRoots result;
@@ -269,10 +270,11 @@ RecentProjects RecentProjects::read(const fs::path& path) {
         throw WorkspaceError(std::string("recent projects: invalid JSON: ") + error.what());
     }
     if (!data.is_object()) fail("recent projects", "must be an object");
-    if (!data.contains("schema_version") || !data.at("schema_version").is_number_integer() ||
-        data.at("schema_version").get<int>() != CurrentSchemaVersion) {
-        fail("schema_version", "expected 1");
+    if (!data.contains("schema_version") || !data.at("schema_version").is_number_integer()) {
+        fail("schema_version", "expected 1 or 2");
     }
+    const int schemaVersion = data.at("schema_version").get<int>();
+    if (schemaVersion < 1 || schemaVersion > CurrentSchemaVersion) fail("schema_version", "expected 1 or 2");
     if (!data.contains("entries") || !data.at("entries").is_array()) fail("entries", "must be a list");
 
     std::set<std::string> seen;
@@ -283,11 +285,17 @@ RecentProjects RecentProjects::read(const fs::path& path) {
         const fs::path normalized = root.lexically_normal();
         const std::string key = portablePath(normalized);
         if (!seen.insert(key).second) fail("entries", "must not contain duplicate roots");
+        bool pinned = false;
+        if (schemaVersion >= 2 && entry.contains("pinned")) {
+            if (!entry.at("pinned").is_boolean()) fail("pinned", "must be a boolean");
+            pinned = entry.at("pinned").get<bool>();
+        }
         result.entries_.push_back({
             normalized,
             requiredString(entry, "project_guid"),
             requiredString(entry, "name"),
             requiredString(entry, "last_opened_at"),
+            pinned,
         });
         if (result.entries_.size() > MaximumEntries) fail("entries", "exceeds the maximum entry count");
     }
@@ -301,12 +309,23 @@ void RecentProjects::record(const fs::path& projectRoot, const ProjectManifest& 
         throw WorkspaceError("recent projects: manifest identity does not match project root");
     }
     const std::string key = portablePath(canonical);
+    bool pinned = false;
+    for (const auto& entry : entries_) {
+        if (portablePath(entry.root) == key) {
+            pinned = entry.pinned;
+            break;
+        }
+    }
     entries_.erase(
         std::remove_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
             return portablePath(entry.root) == key;
         }),
         entries_.end());
-    entries_.insert(entries_.begin(), {canonical, actual.projectGuid(), actual.name(), utcTimestamp()});
+    auto insertionPoint = entries_.begin();
+    if (!pinned) {
+        insertionPoint = std::find_if(entries_.begin(), entries_.end(), [](const auto& entry) { return !entry.pinned; });
+    }
+    entries_.insert(insertionPoint, {canonical, actual.projectGuid(), actual.name(), utcTimestamp(), pinned});
     if (entries_.size() > MaximumEntries) entries_.resize(MaximumEntries);
 }
 
@@ -327,6 +346,57 @@ void RecentProjects::remove(const fs::path& projectRoot) {
         entries_.end());
 }
 
+bool RecentProjects::setPinned(const fs::path& projectRoot, bool pinned) {
+    const std::string key = portablePath(projectRoot.lexically_normal());
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
+        return portablePath(entry.root) == key;
+    });
+    if (found == entries_.end() || found->pinned == pinned) return false;
+    found->pinned = pinned;
+    std::stable_partition(entries_.begin(), entries_.end(), [](const auto& entry) { return entry.pinned; });
+    return true;
+}
+
+bool RecentProjects::move(const fs::path& projectRoot, int direction) {
+    if (direction != -1 && direction != 1) return false;
+    const std::string key = portablePath(projectRoot.lexically_normal());
+    const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
+        return portablePath(entry.root) == key;
+    });
+    if (found == entries_.end()) return false;
+    const auto index = static_cast<std::ptrdiff_t>(std::distance(entries_.begin(), found));
+    const auto target = index + direction;
+    if (target < 0 || target >= static_cast<std::ptrdiff_t>(entries_.size()) ||
+        entries_[static_cast<std::size_t>(target)].pinned != found->pinned) {
+        return false;
+    }
+    std::iter_swap(found, entries_.begin() + target);
+    return true;
+}
+
+bool RecentProjects::moveBefore(const fs::path& projectRoot, const fs::path& targetRoot) {
+    const std::string sourceKey = portablePath(projectRoot.lexically_normal());
+    const std::string targetKey = portablePath(targetRoot.lexically_normal());
+    if (sourceKey == targetKey) return false;
+
+    const auto source = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
+        return portablePath(entry.root) == sourceKey;
+    });
+    const auto target = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
+        return portablePath(entry.root) == targetKey;
+    });
+    if (source == entries_.end() || target == entries_.end() || source->pinned != target->pinned) return false;
+    if (std::next(source) == target) return false;
+
+    RecentProject moved = *source;
+    entries_.erase(source);
+    const auto newTarget = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
+        return portablePath(entry.root) == targetKey;
+    });
+    entries_.insert(newTarget, std::move(moved));
+    return true;
+}
+
 void RecentProjects::writeAtomic(const fs::path& path) const {
     const fs::path parent = path.parent_path().empty() ? fs::current_path() : path.parent_path();
     if (!fs::is_directory(parent)) throw WorkspaceError("recent projects: parent directory does not exist");
@@ -337,6 +407,7 @@ void RecentProjects::writeAtomic(const fs::path& path) const {
             {"project_guid", entry.projectGuid},
             {"name", entry.name},
             {"last_opened_at", entry.lastOpenedAt},
+            {"pinned", entry.pinned},
         });
     }
     const fs::path temporary = uniqueSibling(path);

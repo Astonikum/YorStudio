@@ -35,7 +35,8 @@ private:
     std::unique_ptr<EditorDocument> editor_;
 
     bool recordRecent(const ProjectManifest& manifest, const std::filesystem::path& projectRoot);
-    void createProject(const std::filesystem::path& parentRoot, std::string name);
+    bool persistRecent();
+    void createProject(const ProjectCreationSettings& settings);
 };
 
 } // namespace yorstudio

@@ -1,7 +1,16 @@
 #include "yorstudio/studio_application.hpp"
 
+#include <fstream>
 #include <exception>
+#include <cstdio>
+#include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace yorstudio {
 
@@ -36,6 +45,112 @@ StudioUiTransform transform(const yorengine::Transform& value) {
     result.scale[1] = value.scale.y;
     result.scale[2] = value.scale.z;
     return result;
+}
+
+void writeTextFile(const std::filesystem::path& path, std::string_view text) {
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    if (!stream) throw ProjectError("project: cannot create " + path.string());
+    stream << text;
+    if (!stream) throw ProjectError("project: cannot write " + path.string());
+}
+
+std::string fileDate(const std::filesystem::path& path, bool creation) {
+#ifdef _WIN32
+    WIN32_FILE_ATTRIBUTE_DATA attributes{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &attributes)) return {};
+    const FILETIME& value = creation ? attributes.ftCreationTime : attributes.ftLastWriteTime;
+    SYSTEMTIME time{};
+    if (!FileTimeToSystemTime(&value, &time)) return {};
+    char result[32]{};
+    std::snprintf(result, sizeof(result), "%04u-%02u-%02u", time.wYear, time.wMonth, time.wDay);
+    return result;
+#else
+    (void)path;
+    (void)creation;
+    return {};
+#endif
+}
+
+void runGit(const std::filesystem::path& workingDirectory, std::wstring command, std::string_view operation) {
+#ifdef _WIN32
+    STARTUPINFOW startupInfo{.cb = sizeof(STARTUPINFOW)};
+    PROCESS_INFORMATION processInfo{};
+    std::vector<wchar_t> commandLine(command.begin(), command.end());
+    commandLine.push_back(L'\0');
+    if (!CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                        workingDirectory.c_str(), &startupInfo, &processInfo)) {
+        throw ProjectError("git: cannot start " + std::string(operation));
+    }
+    WaitForSingleObject(processInfo.hProcess, INFINITE);
+    DWORD exitCode = 1;
+    GetExitCodeProcess(processInfo.hProcess, &exitCode);
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    if (exitCode != 0) throw ProjectError("git: " + std::string(operation) + " failed");
+#else
+    (void)workingDirectory;
+    (void)command;
+    throw ProjectError("git: setup is only available on the Windows desktop host");
+#endif
+}
+
+void configureVersionControl(const std::filesystem::path& root, const ProjectCreationSettings& settings) {
+    if (settings.initializeGit || settings.initializeGitLfs) runGit(root, L"git init", "initialization");
+    if (settings.writeGitIgnore) {
+        writeTextFile(root / ".gitignore",
+            "# YorStudio generated and local files\n"
+            "/build/\n"
+            "/.yor/cache/\n"
+            "/.yor/derived/\n"
+            "/.yor/logs/\n"
+            "/.yor/generated/\n"
+            "/.yor/recovery/\n"
+            "/.yor/editor/\n"
+            ".vs/\n"
+            ".vscode/\n"
+            "*.user\n"
+            "*.suo\n");
+    }
+    if (settings.writeGitAttributes || settings.initializeGitLfs) {
+        std::string attributes =
+            "* text=auto eol=lf\n"
+            "*.png -text\n"
+            "*.jpg -text\n"
+            "*.jpeg -text\n"
+            "*.webp -text\n"
+            "*.ktx -text\n"
+            "*.dds -text\n"
+            "*.wav -text\n"
+            "*.mp3 -text\n"
+            "*.ogg -text\n"
+            "*.fbx -text\n"
+            "*.glb -text\n"
+            "*.gltf -text\n"
+            "*.zip -text\n"
+            "*.7z -text\n"
+            "*.rar -text\n";
+        if (settings.initializeGitLfs) {
+            for (const char* pattern : {
+                     "*.png", "*.jpg", "*.jpeg", "*.webp", "*.ktx", "*.dds", "*.wav", "*.mp3", "*.ogg",
+                     "*.fbx", "*.glb", "*.gltf", "*.zip", "*.7z", "*.rar"}) {
+                attributes += pattern;
+                attributes += " filter=lfs diff=lfs merge=lfs -text\n";
+            }
+        }
+        writeTextFile(root / ".gitattributes", attributes);
+    }
+    if (settings.initializeGitLfs) runGit(root, L"git lfs install --local", "Git LFS initialization");
+}
+
+void validateCreationSettings(const ProjectCreationSettings& settings) {
+    if (settings.parentDirectory.empty() || !std::filesystem::is_directory(settings.parentDirectory)) {
+        throw ProjectError("project: parent directory must be an existing folder");
+    }
+    if (settings.name.empty() || settings.name == "." || settings.name == ".." ||
+        std::filesystem::path(settings.name).filename().string() != settings.name) {
+        throw ProjectError("project: name must be a single folder name");
+    }
+    if (settings.startupScene.empty()) throw ProjectError("project: startup scene must not be empty");
 }
 
 } // namespace
@@ -86,11 +201,44 @@ void StudioApplication::handle(const StudioUiAction& action, const std::filesyst
     case StudioUiCommand::chooseProject:
         if (!selectedProject.empty()) openProject(selectedProject);
         break;
+    case StudioUiCommand::chooseProjectParent:
+        break;
     case StudioUiCommand::openRecentProject:
         if (!action.projectRoot.empty()) openProject(action.projectRoot);
         break;
+    case StudioUiCommand::setRecentPinned:
+        if (!action.projectRoot.empty() && recentProjects_.setPinned(action.projectRoot, action.active)) persistRecent();
+        break;
+    case StudioUiCommand::moveRecentProjectUp:
+        if (!action.projectRoot.empty() && recentProjects_.move(action.projectRoot, -1)) persistRecent();
+        break;
+    case StudioUiCommand::moveRecentProjectDown:
+        if (!action.projectRoot.empty() && recentProjects_.move(action.projectRoot, 1)) persistRecent();
+        break;
+    case StudioUiCommand::moveRecentProjectBefore:
+        if (!action.projectRoot.empty() && !action.targetProjectRoot.empty() &&
+            recentProjects_.moveBefore(action.projectRoot, action.targetProjectRoot)) {
+            persistRecent();
+        }
+        break;
+    case StudioUiCommand::removeRecentProject:
+        if (!action.projectRoot.empty()) {
+            recentProjects_.remove(action.projectRoot);
+            persistRecent();
+        }
+        break;
     case StudioUiCommand::newProject:
-        if (!selectedProject.empty() && !action.projectName.empty()) createProject(selectedProject, action.projectName);
+        if (!action.projectSettings.name.empty()) {
+            createProject(action.projectSettings);
+        } else if (!selectedProject.empty() && !action.projectName.empty()) {
+            ProjectCreationSettings legacy;
+            legacy.parentDirectory = selectedProject;
+            legacy.name = action.projectName;
+            legacy.initializeGit = false;
+            legacy.writeGitIgnore = false;
+            legacy.writeGitAttributes = false;
+            createProject(legacy);
+        }
         break;
     case StudioUiCommand::createObject:
         if (!editor_ || !editor_->createObject(action.objectName)) status_ = "Cannot create object.";
@@ -192,7 +340,13 @@ StudioUiFrame StudioApplication::frame() const {
     }
     result.recentProjects.reserve(recentProjects_.entries().size());
     for (const auto& recent : recentProjects_.entries()) {
-        result.recentProjects.push_back({recent.name, recent.root.string()});
+        result.recentProjects.push_back({
+            recent.name,
+            recent.root.string(),
+            recent.pinned,
+            fileDate(recent.root, true),
+            fileDate(recent.root, false),
+        });
     }
     return result;
 }
@@ -200,25 +354,39 @@ StudioUiFrame StudioApplication::frame() const {
 bool StudioApplication::recordRecent(const ProjectManifest& manifest, const std::filesystem::path& projectRoot) {
     try {
         recentProjects_.record(projectRoot, manifest);
-        if (!recentProjectsPath_.empty()) {
-            const auto parent = recentProjectsPath_.parent_path();
-            if (!parent.empty()) std::filesystem::create_directories(parent);
-            recentProjects_.writeAtomic(recentProjectsPath_);
-        }
+        return persistRecent();
     } catch (const std::exception& error) {
         status_ = std::string("Project opened; recent registry unavailable: ") + error.what();
         return false;
     }
-    return true;
 }
 
-void StudioApplication::createProject(const std::filesystem::path& parentRoot, std::string name) {
+bool StudioApplication::persistRecent() {
+    if (recentProjectsPath_.empty()) return true;
     try {
-        const auto parent = std::filesystem::absolute(parentRoot).lexically_normal();
-        const auto root = parent / name;
+        const auto parent = recentProjectsPath_.parent_path();
+        if (!parent.empty()) std::filesystem::create_directories(parent);
+        recentProjects_.writeAtomic(recentProjectsPath_);
+        return true;
+    } catch (const std::exception& error) {
+        status_ = std::string("Recent projects unavailable: ") + error.what();
+        return false;
+    }
+}
+
+void StudioApplication::createProject(const ProjectCreationSettings& settings) {
+    std::filesystem::path root;
+    bool published = false;
+    try {
+        validateCreationSettings(settings);
+        const auto parent = std::filesystem::absolute(settings.parentDirectory).lexically_normal();
+        root = parent / settings.name;
         WorkspaceRoots roots({parent});
-        const ProjectManifest manifest = ProjectManifest::create(std::move(name));
+        const ProjectManifest manifest = ProjectManifest::create(
+            settings.name, settings.engineVersion, {}, settings.startupScene, settings.targetPlatforms);
         newProject(roots, root, manifest);
+        published = true;
+        configureVersionControl(root, settings);
         auto session = roots.openProject(root, ProjectAccess::readWrite);
         const ProjectManifest actual = session.manifest();
         project_ = std::move(session);
@@ -231,6 +399,10 @@ void StudioApplication::createProject(const std::filesystem::path& parentRoot, s
         }
         if (recordRecent(actual, root)) status_ = std::move(sceneStatus);
     } catch (const std::exception& error) {
+        if (published) {
+            std::error_code cleanupError;
+            std::filesystem::remove_all(root, cleanupError);
+        }
         status_ = error.what();
     }
 }

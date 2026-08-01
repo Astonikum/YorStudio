@@ -1,6 +1,7 @@
 #include "win32_window.hpp"
 
 #include <shlobj.h>
+#include <shobjidl.h>
 
 #include <array>
 
@@ -142,17 +143,34 @@ std::filesystem::path Win32Window::browseForProject() const {
 }
 
 std::filesystem::path Win32Window::browseForDirectory(std::wstring_view title) const {
-    BROWSEINFOW browseInfo{
-        .hwndOwner = window_,
-        .lpszTitle = title.data(),
-        .ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
-    };
-    PIDLIST_ABSOLUTE selected = SHBrowseForFolderW(&browseInfo);
-    if (!selected) return {};
-    std::array<wchar_t, MAX_PATH> path{};
-    const bool resolved = SHGetPathFromIDListW(selected, path.data());
-    CoTaskMemFree(selected);
-    return resolved ? std::filesystem::path(path.data()) : std::filesystem::path{};
+    IFileDialog* dialog = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+        return {};
+    }
+
+    DWORD options = 0;
+    if (FAILED(dialog->GetOptions(&options)) ||
+        FAILED(dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST))) {
+        dialog->Release();
+        return {};
+    }
+    const std::wstring dialogTitle(title);
+    dialog->SetTitle(dialogTitle.c_str());
+
+    std::filesystem::path selectedPath;
+    if (SUCCEEDED(dialog->Show(window_))) {
+        IShellItem* item = nullptr;
+        if (SUCCEEDED(dialog->GetResult(&item))) {
+            PWSTR path = nullptr;
+            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                selectedPath = std::filesystem::path(path);
+                CoTaskMemFree(path);
+            }
+            item->Release();
+        }
+    }
+    dialog->Release();
+    return selectedPath;
 }
 
 std::filesystem::path Win32Window::recentProjectsPath() const {

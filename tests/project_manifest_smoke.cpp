@@ -304,11 +304,23 @@ int main() {
         recent.record(gamePaths.root, created);
         CHECK(recent.entries().size() == 2);
         CHECK(std::filesystem::equivalent(recent.entries().front().root, gamePaths.root));
+        CHECK(recent.setPinned(customPaths.root, true));
+        CHECK(recent.entries().front().pinned);
+        CHECK(std::filesystem::equivalent(recent.entries().front().root, customPaths.root));
+        CHECK(!recent.move(customPaths.root, 1));
+        CHECK(recent.setPinned(gamePaths.root, true));
+        CHECK(recent.move(gamePaths.root, -1));
+        CHECK(std::filesystem::equivalent(recent.entries().front().root, gamePaths.root));
+        CHECK(recent.moveBefore(customPaths.root, gamePaths.root));
+        CHECK(std::filesystem::equivalent(recent.entries().front().root, customPaths.root));
+        CHECK(recent.moveBefore(gamePaths.root, customPaths.root));
+        CHECK(!recent.moveBefore(gamePaths.root, customPaths.root));
         const auto recentPath = temporary.path / "recent.yorprojects";
         recent.writeAtomic(recentPath);
         const RecentProjects loadedRecent = RecentProjects::read(recentPath);
         CHECK(loadedRecent.entries().size() == 2);
         CHECK(loadedRecent.entries().front().projectGuid == created.projectGuid());
+        CHECK(loadedRecent.entries().front().pinned);
         removeRecentProject(recent, customPaths.root);
         CHECK(recent.entries().size() == 1);
 
@@ -503,6 +515,24 @@ int main() {
         CHECK(reopened.frame().projectOpen);
         CHECK(reopened.frame().projectName == "Created Game");
         reopened.handle({StudioUiCommand::quit});
+
+        const auto configuredRegistry = temporary.path / "configured-recent.yorprojects";
+        StudioApplication configured(configuredRegistry);
+        StudioUiAction configuredCreate;
+        configuredCreate.command = StudioUiCommand::newProject;
+        configuredCreate.projectSettings.parentDirectory = temporary.path;
+        configuredCreate.projectSettings.name = "Configured Game";
+        configuredCreate.projectSettings.startupScene = "scenes/startup.yorscene";
+        configuredCreate.projectSettings.initializeGit = false;
+        configuredCreate.projectSettings.writeGitIgnore = false;
+        configuredCreate.projectSettings.writeGitAttributes = false;
+        configured.handle(configuredCreate);
+        CHECK(configured.frame().projectOpen);
+        CHECK(configured.frame().projectName == "Configured Game");
+        const auto configuredManifest = ProjectManifest::read(temporary.path / "Configured Game" / "project.yorproject");
+        CHECK(configuredManifest.startupScene() == "scenes/startup.yorscene");
+        CHECK(std::filesystem::is_regular_file(temporary.path / "Configured Game" / "scenes" / "startup.yorscene"));
+        configured.handle({StudioUiCommand::quit});
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
