@@ -178,8 +178,8 @@ if(YORSTUDIO_BUILD_DESKTOP AND WIN32)
     file(READ "${yor_imwindow_manager_file}" yor_imwindow_manager)
     string(REPLACE "\r\n" "\n" yor_imwindow_manager "${yor_imwindow_manager}")
     if(NOT yor_imwindow_manager MATCHES "YORSTUDIO_IMWINDOW_NO_EMPTY_MAIN_BOTTOM")
-        string(REGEX REPLACE
-            "float fBottom = pWindow->IsMainWindow\\(\\) \\?[^\\r\\n]*"
+        string(REPLACE
+            "float fBottom = pWindow->IsMainWindow() ?  (GetStatusBarHeight() + oStyle.ItemSpacing.y) : 0.f;"
             "float fBottom = pWindow->IsMainWindow() ? GetStatusBarHeight() : 0.f;"
             yor_imwindow_manager
             "${yor_imwindow_manager}"
