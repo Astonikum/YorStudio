@@ -46,6 +46,12 @@ fs::path canonicalDirectory(const fs::path& path, std::string_view field) {
     return canonical;
 }
 
+fs::path normalizedProjectRoot(const fs::path& path) {
+    std::error_code error;
+    const fs::path normalized = fs::weakly_canonical(path, error);
+    return error ? path.lexically_normal() : normalized;
+}
+
 std::string portablePath(const fs::path& path) {
     return path.lexically_normal().generic_string();
 }
@@ -347,7 +353,7 @@ void RecentProjects::remove(const fs::path& projectRoot) {
 }
 
 bool RecentProjects::setPinned(const fs::path& projectRoot, bool pinned) {
-    const std::string key = portablePath(projectRoot.lexically_normal());
+    const std::string key = portablePath(normalizedProjectRoot(projectRoot));
     const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
         return portablePath(entry.root) == key;
     });
@@ -359,7 +365,7 @@ bool RecentProjects::setPinned(const fs::path& projectRoot, bool pinned) {
 
 bool RecentProjects::move(const fs::path& projectRoot, int direction) {
     if (direction != -1 && direction != 1) return false;
-    const std::string key = portablePath(projectRoot.lexically_normal());
+    const std::string key = portablePath(normalizedProjectRoot(projectRoot));
     const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
         return portablePath(entry.root) == key;
     });
@@ -375,8 +381,8 @@ bool RecentProjects::move(const fs::path& projectRoot, int direction) {
 }
 
 bool RecentProjects::moveBefore(const fs::path& projectRoot, const fs::path& targetRoot) {
-    const std::string sourceKey = portablePath(projectRoot.lexically_normal());
-    const std::string targetKey = portablePath(targetRoot.lexically_normal());
+    const std::string sourceKey = portablePath(normalizedProjectRoot(projectRoot));
+    const std::string targetKey = portablePath(normalizedProjectRoot(targetRoot));
     if (sourceKey == targetKey) return false;
 
     const auto source = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) {
